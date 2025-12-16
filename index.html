@@ -70,23 +70,31 @@
 	
 	// mới
 	#install-banner {
-        display: none;
+        display: none; /* Mặc định ẩn */
         position: fixed;
         bottom: 0; left: 0; right: 0;
         background: white;
-        padding: 15px;
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
-        z-index: 10000;
-        font-family: sans-serif;
+        padding: 20px;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+        z-index: 99999;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         border-radius: 20px 20px 0 0;
-        animation: slideUp 0.5s ease-out;
+        animation: slideUp 0.4s ease-out;
     }
-    .inst-content { display: flex; align-items: center; gap: 15px; }
-    .inst-icon { width: 40px; height: 40px; background: #0078d4; border-radius: 8px; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; }
-    .inst-text h4 { margin: 0 0 5px; color: #333; }
-    .inst-text p { margin: 0; font-size: 13px; color: #666; }
-    .btn-close-inst { position: absolute; top: 10px; right: 10px; border: none; background: none; font-size: 20px; color: #999; cursor: pointer; }
-    
+    .inst-content { display: flex; align-items: flex-start; gap: 15px; }
+    .inst-icon { 
+        min-width: 50px; height: 50px; 
+        background: #0078d4; border-radius: 12px; 
+        color: white; display: flex; align-items: center; justify-content: center; 
+        font-weight: bold; font-size: 24px; box-shadow: 0 4px 6px rgba(0,120,212,0.3);
+    }
+    .inst-text h4 { margin: 0 0 5px; color: #333; font-size: 16px; }
+    .inst-text p { margin: 0; font-size: 14px; color: #666; line-height: 1.4; }
+    .btn-close-inst { 
+        position: absolute; top: 10px; right: 10px; 
+        border: none; background: #f0f2f5; width: 24px; height: 24px; border-radius: 50%;
+        font-size: 16px; color: #666; cursor: pointer; display:flex; align-items:center; justify-content:center;
+    }
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 </style>
 </head>
@@ -179,9 +187,10 @@
 <div id="loading">Đang xử lý...</div>
 
 <div id="install-banner">
-    <button class="btn-close-inst" onclick="document.getElementById('install-banner').style.display='none'">×</button>
+    <button class="btn-close-inst" onclick="closeBannerPermanently()">×</button>
     <div class="inst-content">
-        <div class="inst-icon">NV</div> <div class="inst-text" id="inst-guide-text">
+        <div class="inst-icon">NV</div>
+        <div class="inst-text" id="inst-guide-text">
             </div>
     </div>
 </div>
@@ -717,37 +726,61 @@
 	
 	// mới
 	function checkInstallation() {
-        // Kiểm tra xem web có đang chạy dạng App chưa (Standalone)
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        // 1. KIỂM TRA ĐÃ CÀI CHƯA (STANDALONE MODE)
+        // iOS dùng navigator.standalone, Android/PC dùng display-mode
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
         
-        // Nếu đã cài rồi thì không hiện nữa
-        if (isStandalone) return;
+        if (isStandalone) {
+            console.log("Đang chạy dạng App -> Không hiện banner.");
+            return; // Dừng lại, không làm gì cả
+        }
 
-        // Nếu chưa cài, kiểm tra hệ điều hành
+        // 2. KIỂM TRA NGƯỜI DÙNG ĐÃ TỪNG ĐÓNG CHƯA
+        // Nếu đã đóng rồi thì không làm phiền nữa
+        if (localStorage.getItem("dismissedInstallBanner") === "true") {
+            return;
+        }
+
+        // 3. NẾU CHƯA CÀI & CHƯA ĐÓNG -> KIỂM TRA HỆ ĐIỀU HÀNH ĐỂ HIỆN HƯỚNG DẪN
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         const banner = document.getElementById("install-banner");
         const guideText = document.getElementById("inst-guide-text");
+        let show = false;
 
-        // Kiểm tra iOS (iPhone/iPad)
+        // Dành cho iPhone/iPad (iOS)
         if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
             guideText.innerHTML = `
-                <h4>Cài đặt App Nhân Viên</h4>
-                <p>Bấm vào nút <b>Chia sẻ</b> <span style='font-size:18px'>⎋</span> ở dưới cùng trình duyệt, sau đó chọn <b>"Thêm vào MH chính"</b> (Add to Home Screen).</p>
+                <h4>Cài đặt App vào máy</h4>
+                <p>Bấm vào nút <b>Chia sẻ</b> <span style='font-size:18px'>⎋</span> ở đáy màn hình, sau đó tìm và chọn <b>"Thêm vào MH chính"</b>.</p>
             `;
-            banner.style.display = "block";
+            show = true;
         } 
-        // Kiểm tra Android
+        // Dành cho Android
         else if (/android/i.test(userAgent)) {
             guideText.innerHTML = `
-                <h4>Cài đặt App Nhân Viên</h4>
-                <p>Bấm vào dấu <b>3 chấm</b> <span style='font-size:18px'>⋮</span> ở góc trên, chọn <b>"Thêm vào màn hình chính"</b> (Add to Home screen).</p>
+                <h4>Cài đặt App vào máy</h4>
+                <p>Bấm vào dấu <b>3 chấm</b> <span style='font-size:18px'>⋮</span> ở góc trên bên phải, chọn <b>"Thêm vào màn hình chính"</b>.</p>
             `;
-            banner.style.display = "block";
+            show = true;
+        }
+
+        // Chỉ hiện nếu là điện thoại (Android/iOS)
+        if (show) {
+            setTimeout(() => {
+                banner.style.display = "block";
+            }, 2000); // Đợi 2 giây mới hiện cho đỡ giật mình
         }
     }
 
-    // Chạy kiểm tra sau 2 giây để không làm phiền ngay lập tức
-    setTimeout(checkInstallation, 2000);
+    // Hàm đóng và nhớ lựa chọn
+    function closeBannerPermanently() {
+        document.getElementById("install-banner").style.display = "none";
+        // Lưu vào bộ nhớ trình duyệt để lần sau không hiện nữa
+        localStorage.setItem("dismissedInstallBanner", "true");
+    }
+
+    // Chạy kiểm tra
+    checkInstallation();
 </script>
 
 </body>
