@@ -2,784 +2,165 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CỔNG NHÂN VIÊN</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TRANG CHỦ NHÂN VIÊN</title>
 
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0078d4">
 
-<link rel="apple-touch-icon" href="https://img.icons8.com/color/96/company.png">
-<link rel="icon" type="image/png" href="https://img.icons8.com/color/96/company.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
 <style>
-    /* CSS GIỮ NGUYÊN NHƯ CŨ */
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 0; }
-    .header { background: #0078d4; color: white; padding: 20px; text-align: center; border-radius: 0 0 20px 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .header h2 { margin: 0; font-size: 22px; }
-    .header p { margin: 5px 0 0; opacity: 0.9; }
-    .btn-logout { background: rgba(255,255,255,0.2); border: none; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-size: 12px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
     
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .balance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
-    .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
-    .card h4 { margin: 0 0 5px; color: #666; font-size: 14px; }
-    .card .value { font-size: 24px; font-weight: bold; color: #333; }
-    .card.old { border-bottom: 3px solid #f1c40f; }
-    .card.new { border-bottom: 3px solid #2ecc71; }
-    
-    .action-box { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 25px; }
-    .action-box h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #0078d4; }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #444; }
-    .form-control { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-    
-    .date-row { display: flex; gap: 15px; }
-    .date-col { flex: 1; }
-
-    .source-list-container { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; background: white; }
-    .source-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
-    .source-item:last-child { border-bottom: none; }
-    .source-item:hover { background: #f9f9f9; }
-    .source-item input { margin-right: 10px; transform: scale(1.2); cursor: pointer; }
-    .source-info { display: flex; flex-direction: column; }
-    .source-date { font-weight: bold; color: #2c3e50; font-size: 14px; }
-    .source-val { font-size: 12px; color: #27ae60; font-weight: 600; }
-    
-    .source-summary { margin-top: 5px; font-size: 13px; font-weight: bold; text-align: right; }
-    .status-ok { color: #27ae60; }
-    .status-lack { color: #e74c3c; }
-
-    .calc-info { background: #f0f9ff; padding: 10px; border-radius: 8px; color: #0078d4; font-size: 14px; margin-bottom: 15px; border: 1px dashed #0078d4; display: none; }
-
-    .btn-submit { width: 100%; padding: 12px; background: #0078d4; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-    .btn-submit:active { transform: scale(0.98); }
-    
-    .history-list { list-style: none; padding: 0; }
-    .history-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #ddd; }
-    .history-item.st-Cho { border-left-color: #f39c12; }
-    .history-item.st-Duyet { border-left-color: #2ecc71; }
-    .history-item.st-TuChoi { border-left-color: #e74c3c; }
-    .h-date { font-weight: bold; display: block; }
-    .h-type { font-size: 12px; color: #666; background: #eee; padding: 2px 6px; border-radius: 4px; margin-left: 5px;}
-    .h-status { font-size: 12px; font-weight: bold; color: #888; }
-    .btn-cancel { background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-top: 5px; }
-    
-    #loading { text-align: center; padding: 20px; color: #666; display: none; }
-	
-	// mới
-	#install-banner {
-        display: none; /* Mặc định ẩn */
-        position: fixed;
-        bottom: 0; left: 0; right: 0;
-        background: white;
-        padding: 20px;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-        z-index: 99999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        border-radius: 20px 20px 0 0;
-        animation: slideUp 0.4s ease-out;
+    /* Header đẹp */
+    .app-header { 
+        background: linear-gradient(135deg, #0078d4, #005a9e); 
+        color: white; padding: 20px; padding-top: 50px; 
+        text-align: left; font-weight: bold; font-size: 22px; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+        border-radius: 0 0 25px 25px;
+        margin-bottom: 10px;
     }
-    .inst-content { display: flex; align-items: flex-start; gap: 15px; }
-    .inst-icon { 
-        min-width: 50px; height: 50px; 
-        background: #0078d4; border-radius: 12px; 
-        color: white; display: flex; align-items: center; justify-content: center; 
-        font-weight: bold; font-size: 24px; box-shadow: 0 4px 6px rgba(0,120,212,0.3);
+    .app-header p { margin: 5px 0 0; font-size: 14px; opacity: 0.8; font-weight: normal; }
+
+    /* Lưới menu */
+    .container { padding: 20px; flex: 1; }
+    .menu-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    
+    /* Thiết kế nút bấm (Card) */
+    .menu-card { 
+        background: white; padding: 20px; border-radius: 16px; 
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
+        display: flex; align-items: center; gap: 20px; 
+        cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; 
+        text-decoration: none; color: inherit; /* Để thẻ a không bị gạch chân */
     }
+    .menu-card:active { transform: scale(0.96); background: #fafafa; }
+    
+    /* Icon hộp vuông */
+    .icon-box { 
+        width: 60px; height: 60px; border-radius: 14px; 
+        display: flex; align-items: center; justify-content: center; 
+        font-size: 26px; color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .card-text h3 { margin: 0; font-size: 17px; color: #333; }
+    .card-text p { margin: 4px 0 0; font-size: 13px; color: #888; }
+
+    /* Màu sắc riêng cho từng nút */
+    .bg-date { background: linear-gradient(135deg, #FF9800, #F57C00); }   /* Cam */
+    .bg-stock { background: linear-gradient(135deg, #2196F3, #1976D2); }  /* Xanh dương */
+    .bg-leave { background: linear-gradient(135deg, #4CAF50, #388E3C); }  /* Xanh lá */
+
+    /* Footer nhỏ */
+    .footer { text-align: center; padding: 20px; color: #aaa; font-size: 12px; }
+
+    /* CSS Banner cài đặt (Giữ nguyên từ code trước) */
+    #install-banner { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 20px; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); z-index: 99999; border-radius: 20px 20px 0 0; animation: slideUp 0.4s ease-out; }
+    .inst-content { display: flex; align-items: center; gap: 15px; }
+    .inst-icon { min-width: 50px; height: 50px; background: #0078d4; border-radius: 12px; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 24px; }
     .inst-text h4 { margin: 0 0 5px; color: #333; font-size: 16px; }
-    .inst-text p { margin: 0; font-size: 14px; color: #666; line-height: 1.4; }
-    .btn-close-inst { 
-        position: absolute; top: 10px; right: 10px; 
-        border: none; background: #f0f2f5; width: 24px; height: 24px; border-radius: 50%;
-        font-size: 16px; color: #666; cursor: pointer; display:flex; align-items:center; justify-content:center;
-    }
+    .inst-text p { margin: 0; font-size: 14px; color: #666; }
+    .btn-close-inst { position: absolute; top: 10px; right: 10px; border: none; background: #f0f2f5; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 </style>
 </head>
 <body>
 
-<div id="loginScreen" style="height: 100vh; display: flex; align-items: center; justify-content: center; background: #eef2f5;">
-    <div style="background: white; padding: 30px; border-radius: 12px; width: 300px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-        <h2 style="color: #0078d4;">CỔNG NHÂN VIÊN</h2>
-        <input type="text" id="usernameInput" class="form-control" placeholder="Nhập Mã Nhân Viên (VD: NV01)" style="margin-bottom: 15px;" onkeypress="handleEnter(event)">
-        <button onclick="doLogin()" class="btn-submit">Truy Cập</button>
-    </div>
-</div>
-
-<div id="mainScreen" style="display: none;">
-    <div class="header">
-        <h2 id="dispName">Đang tải...</h2>
-        <p id="dispRole">...</p>
-        <button class="btn-logout" onclick="logout()">Thoát</button>
+    <div class="app-header">
+        Xin chào! 👋
+        <p>Chọn chức năng bạn cần sử dụng</p>
     </div>
 
     <div class="container">
-        <h3 style="margin-top:0; color: #444;">Số Dư phép/bù Năm <span id="currentYearDisp"></span></h3>
-        <div class="balance-grid">
-            <!-- <div class="card old"> <h4 id="lblPOld">Phép Năm Cũ</h4> <div class="value" id="valPOld">-</div> </div>
-            <div class="card new"> <h4 id="lblPNew">Phép Năm Mới</h4> <div class="value" id="valPNew">-</div> </div>
-            <div class="card old"> <h4 id="lblBOld">Nghỉ Bù Cũ</h4> <div class="value" id="valBOld">-</div> </div>
-            <div class="card new"> <h4 id="lblBNew">Nghỉ Bù Mới</h4> <div class="value" id="valBNew">-</div> </div> -->
-			<div class="card old" id="cardPOld"> <h4 id="lblPOld">Phép Năm Cũ</h4> <div class="value" id="valPOld">-</div> </div>
-			<div class="card new"> <h4 id="lblPNew">Phép Năm Mới</h4> <div class="value" id="valPNew">-</div> </div>
-			<div class="card old" id="cardBOld"> <h4 id="lblBOld">Nghỉ Bù Cũ</h4> <div class="value" id="valBOld">-</div> </div>
-			<div class="card new"> <h4 id="lblBNew">Nghỉ Bù Mới</h4> <div class="value" id="valBNew">-</div> </div>
-            <div class="card" style="grid-column: span 2; background: #fff3cd; border-bottom: none;">
-                <h4 style="color: #d35400;">TỔNG PHÉP/BÙ CÓ THỂ SỬ DỤNG</h4> <div class="value" id="valTotal" style="color: #d35400;">-</div>
-            </div>
-        </div>
-
-        <div class="action-box">
-            <h3>📅 Đăng Ký Nghỉ</h3>
+        <div class="menu-grid">
             
-            <div class="form-group">
-                <label>Loại nghỉ</label>
-                <select id="reqType" class="form-control" onchange="calcTotalDays()">
-                    <option value="P">Nghỉ Phép (1.0 ngày)</option>
-                    <option value="P/2">Nghỉ Phép 0.5 (Sáng/Chiều)</option>
-                    <option value="NB">Nghỉ Bù (1.0 ngày)</option>
-                    <option value="NB/2">Nghỉ Bù 0.5 (Sáng/Chiều)</option>
-                </select>
-            </div>
-
-            <div class="form-group" id="groupNbSource" style="display:none; background: #e8f0fe; padding: 15px; border-radius: 8px;">
-                <label style="color:#1967d2; font-size: 14px; margin-bottom:10px;">Chọn nguồn công để bù (Bắt buộc phải <b>BẰNG</b> số ngày nghỉ):</label>
-                <div id="sourceList" class="source-list-container"><div style="padding:10px; text-align:center;">Đang tải...</div></div>
-                <div id="sourceSummary" class="source-summary status-lack">...</div>
-            </div>
-
-            <div class="form-group">
-                <div class="date-row">
-                    <div class="date-col">
-                        <label>Từ ngày</label>
-                        <input type="date" id="reqStartDate" class="form-control" onchange="calcTotalDays()">
-                    </div>
-                    <div class="date-col">
-                        <label>Đến ngày</label>
-                        <input type="date" id="reqEndDate" class="form-control" onchange="calcTotalDays()">
-                    </div>
+            <a href="#" id="linkDate" class="menu-card">
+                <div class="icon-box bg-date"><i class="fas fa-calendar-day"></i></div>
+                <div class="card-text">
+                    <h3>Tính Hạn Sử Dụng</h3>
+                    <p>Công cụ tính date nhanh</p>
                 </div>
-            </div>
-            
-            <div id="calcInfo" class="calc-info"></div>
+            </a>
 
-            <div class="form-group">
-                <label>Lý do / Ghi chú</label>
-                <input type="text" id="reqReason" class="form-control" placeholder="Nhập lý do/ Ghi chú">
-            </div>
-            
-            <button onclick="submitRequest()" class="btn-submit">Gửi Yêu Cầu</button>
+            <a href="#" id="linkStock" class="menu-card">
+                <div class="icon-box bg-stock"><i class="fas fa-box-open"></i></div>
+                <div class="card-text">
+                    <h3>Tra Cứu mẫu tủ</h3>
+                    <p>Xem mẫu & hình ảnh tủ</p>
+                </div>
+            </a>
+
+            <a href="#" id="linkEmployee" class="menu-card">
+                <div class="icon-box bg-leave"><i class="fas fa-user-clock"></i></div>
+                <div class="card-text">
+                    <h3>Phép & bù</h3>
+                    <p>Đăng ký nghỉ, xem phép/bù</p>
+                </div>
+            </a>
+
         </div>
-
-        <h3 style="color: #444;">Lịch sử yêu cầu</h3>
-		<ul id="historyList" class="history-list"></ul>
-
-		<div id="viewMoreContainer" style="text-align: center; margin-bottom: 20px; display: none;">
-			<button onclick="renderHistory(globalHistoryData, true)" style="background: white; border: 1px solid #0078d4; color: #0078d4; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 13px;">
-				↓ Xem toàn bộ lịch sử cũ hơn
-			</button>
-		</div>
-			</div>
-		</div>
-
-<div id="loading">Đang xử lý...</div>
-
-<div id="install-banner">
-    <button class="btn-close-inst" onclick="closeBannerPermanently()">×</button>
-    <div class="inst-content">
-        <div class="inst-icon">NV</div>
-        <div class="inst-text" id="inst-guide-text">
-            </div>
     </div>
-</div>
+
+    <div class="footer">
+        CỔNG THÔNG TIN NỘI BỘ
+    </div>
+
+    <div id="install-banner">
+        <button class="btn-close-inst" onclick="closeBanner()">×</button>
+        <div class="inst-content">
+            <div class="inst-icon">App</div>
+            <div class="inst-text" id="inst-guide-text"></div>
+        </div>
+    </div>
 
 <script>
-    const SUPABASE_URL = 'https://renqusdcczlhrglbclhe.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlbnF1c2RjY3psaHJnbGJjbGhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMTIyMzUsImV4cCI6MjA4MDU4ODIzNX0.kF960FS-VvAM2rkNo9kVHfmGAkpwrmlZ5Vf9-QFiC2E';
+    // ==========================================
+    // ⚙️ CẤU HÌNH ĐƯỜNG LINK CỦA BẠN TẠI ĐÂY
+    // ==========================================
     
-    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // 1. Link công cụ tính Date (Nếu chưa có thì để dấu #)
+    const URL_DATE = "https://bathinh008.github.io/tinhhsd/"; 
     
-    let globalNeededTotal = 0; 
-	let globalHistoryData = [];
-
-    // --- KHỞI TẠO ---
-    const savedUser = sessionStorage.getItem("empUser");
-    if (savedUser) {
-        document.getElementById("loginScreen").style.display = "none";
-        document.getElementById("mainScreen").style.display = "block";
-        loadData(savedUser);
-        setupRealtimeListener(savedUser);
-    }
-
-    function handleEnter(e) { if (e.key === "Enter") doLogin(); }
-
-    async function doLogin() {
-        const userCode = document.getElementById("usernameInput").value.trim().toUpperCase();
-        if (!userCode) return alert("Vui lòng nhập mã!");
-
-        document.getElementById("loading").style.display = "block";
-        
-        const { data, error } = await _supabase
-            .from('employees')
-            .select('code, name, status')
-            .eq('code', userCode)
-            .single();
-            
-        document.getElementById("loading").style.display = "none";
-
-        if (error || !data) { alert("Mã nhân viên không tồn tại!"); return; }
-        if (data.status === 'inactive') { alert(`Tài khoản đã bị vô hiệu hóa.`); return; }
-
-        sessionStorage.setItem("empUser", userCode);
-        document.getElementById("loginScreen").style.display = "none";
-        document.getElementById("mainScreen").style.display = "block";
-        loadData(userCode);
-        setupRealtimeListener(userCode);
-    }
-
-    function logout() { sessionStorage.removeItem("empUser"); location.reload(); }
-
-    // --- TẢI DỮ LIỆU (ĐÃ SỬA LỖI TÍNH TOÁN VÀ ĐỒNG BỘ) ---
-    async function loadData(userCode) {
-        document.getElementById("loading").style.display = "block";
-        try {
-            // Lấy dữ liệu tuần & nhân viên (Giữ nguyên)
-            const weekRes = await _supabase.from('weeks').select('week_start').eq('group_name', 'Gia dụng').order('week_start', { ascending: false }).limit(1).single();
-            let systemCurrentDate = new Date(); 
-            let targetYear = new Date().getFullYear(); 
-            if (weekRes.data && weekRes.data.week_start) {
-                systemCurrentDate = new Date(weekRes.data.week_start);
-                targetYear = systemCurrentDate.getFullYear();
-            }
-
-            // Tải dữ liệu từ DB
-            const [empRes, balRes, histRes, sourceRes] = await Promise.all([
-                _supabase.from('employees').select('*').eq('code', userCode).single(),
-                _supabase.from('leave_balance').select('*').eq('emp_code', userCode).eq('year', targetYear).maybeSingle(), 
-                _supabase.from('leave_requests').select('*').eq('emp_code', userCode).order('created_at', { ascending: false }),
-                _supabase.from('supplemental_leave').select('*').eq('emp_code', userCode).eq('type', 'NB').gt('amount', 0)
-            ]);
-
-            // Hiển thị thông tin NV
-            if (empRes.data) {
-                if (empRes.data.status === 'inactive') { logout(); return; }
-                document.getElementById("dispName").innerText = empRes.data.name;
-                document.getElementById("dispRole").innerText = empRes.data.role || "Nhân viên";
-            }
-
-            // XỬ LÝ SỐ DƯ (Giữ nguyên logic cũ)
-            let pOld = 0, pNew = 0, bOld = 0, bNew = 0;
-            if (balRes.data) {
-                pNew = Number(balRes.data.pn_val) || 0; bNew = Number(balRes.data.nb_val) || 0;     
-                pOld = Number(balRes.data.pn_old_val) || 0; bOld = Number(balRes.data.nb_old_val) || 0; 
-            }
-            if (empRes.data) {
-                const pnExpireDate = empRes.data.pn_expire ? new Date(empRes.data.pn_expire) : null;
-                const nbExpireDate = empRes.data.nb_expire ? new Date(empRes.data.nb_expire) : null;
-                if (pnExpireDate && systemCurrentDate > pnExpireDate) pOld = 0;
-                if (nbExpireDate && systemCurrentDate > nbExpireDate) bOld = 0;
-            }
-
-            document.getElementById("currentYearDisp").innerText = targetYear;
-            document.getElementById("lblPOld").innerText = `Phép ${targetYear - 1}`;
-            document.getElementById("lblPNew").innerText = `Phép ${targetYear}`;
-            document.getElementById("lblBOld").innerText = `Bù ${targetYear - 1}`;
-            document.getElementById("lblBNew").innerText = `Bù ${targetYear}`;
-
-            // TÍNH TOÁN SỐ DƯ HIỂN THỊ
-            let pendingP = 0, pendingNB = 0;
-            if (histRes.data) {
-                histRes.data.forEach(req => {
-                    if (req.status === 'Chờ duyệt') {
-                        // [FIX] Ưu tiên lấy giá trị val thực tế từ DB
-                        let val = req.val !== null ? req.val : (req.type.includes("/2") ? 0.5 : 1.0);
-                        if (req.type.startsWith("P")) pendingP += val;
-                        if (req.type.startsWith("NB")) pendingNB += val;
-                    }
-                });
-            }
-
-            let displayPOld = pOld, displayPNew = pNew;
-            if (displayPOld >= pendingP) displayPOld -= pendingP;
-            else { let remain = pendingP - displayPOld; displayPOld = 0; displayPNew = Math.max(0, displayPNew - remain); }
-
-            let displayBOld = bOld, displayBNew = bNew;
-            if (displayBOld >= pendingNB) displayBOld -= pendingNB;
-            else { let remain = pendingNB - displayBOld; displayBOld = 0; displayBNew = Math.max(0, displayBNew - remain); }
-
-            document.getElementById("valPOld").innerText = parseFloat(displayPOld.toFixed(1));
-            document.getElementById("valPNew").innerText = parseFloat(displayPNew.toFixed(1));
-            document.getElementById("valBOld").innerText = parseFloat(displayBOld.toFixed(1));
-            document.getElementById("valBNew").innerText = parseFloat(displayBNew.toFixed(1));
-
-            // Ẩn hiện card năm cũ
-            const cardPOld = document.getElementById("cardPOld"); if (cardPOld) cardPOld.style.display = (displayPOld > 0) ? '' : 'none';
-            const cardBOld = document.getElementById("cardBOld"); if (cardBOld) cardBOld.style.display = (displayBOld > 0) ? '' : 'none';
-            
-            const grandTotal = displayPOld + displayPNew + displayBOld + displayBNew;
-            document.getElementById("valTotal").innerText = parseFloat(grandTotal.toFixed(2));
-            document.getElementById("valTotal").style.color = (pendingP > 0 || pendingNB > 0) ? "#f39c12" : "#d35400";
-
-            // --- [PHẦN SỬA CHÍNH] RENDER CHECKLIST & TÍNH TOÁN ĐÃ DÙNG ---
-            const listDiv = document.getElementById("sourceList");
-            listDiv.innerHTML = "";
-            
-            if(sourceRes.data && sourceRes.data.length > 0) {
-                sourceRes.data.forEach(src => {
-                    let usedAmount = 0;
-                    
-                    // Tạo các biến để đối chiếu
-                    const d = new Date(src.date);
-                    const day = d.getDate();
-                    const month = d.getMonth() + 1;
-                    
-                    // 1. Dạng chuẩn: "8/12"
-                    const dStr1 = `${day}/${month}`; 
-                    // 2. Dạng có số 0: "08/12" (đề phòng bên Sắp ca lưu dạng này)
-                    const dStr2 = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}`;
-                    
-                    const signatureText = `(${src.reason})`; 
-                    const signatureID = `[REF:${src.id}]`; 
-
-                    if (histRes.data) {
-                        histRes.data.forEach(req => {
-                            if (req.status !== 'Từ chối' && req.reason) {
-                                // Logic kiểm tra thông minh hơn:
-                                // - Có ID (chính xác nhất)
-                                // - Hoặc có chứa ngày tháng (dạng 1 hoặc dạng 2) VÀ là đơn nghỉ bù
-                                const hasID = req.reason.includes(signatureID);
-                                const hasDate = (req.reason.includes(dStr1) || req.reason.includes(dStr2));
-                                const isComp = req.type.startsWith("NB") || req.reason.toLowerCase().includes("bù");
-
-                                if (hasID || (hasDate && isComp)) {
-                                    // [QUAN TRỌNG] Lấy đúng số lượng đã trừ trong DB
-                                    // Nếu DB có cột val (ví dụ 0.5) thì lấy 0.5. Nếu không thì mới đoán theo Type.
-                                    let valUsed = req.val !== null ? req.val : (req.type.includes("/2") ? 0.5 : 1.0);
-                                    usedAmount += valUsed;
-                                }
-                            }
-                        });
-                    }
-
-                    const remaining = parseFloat(src.amount) - usedAmount;
-                    
-                    if (remaining > 0) {
-                        const item = document.createElement("div");
-                        item.className = "source-item";
-                        item.onclick = function(e) {
-                            if (e.target.type !== 'checkbox') {
-                                const cb = this.querySelector('input');
-                                cb.checked = !cb.checked;
-                                calcTotalDays(); 
-                            }
-                        };
-                        const valDisplay = remaining < 1 ? `(Còn: ${remaining} ngày)` : `(Còn: ${remaining} ngày)`;
-                        const colorStyle = remaining < 1 ? "color:#e67e22;" : "color:#27ae60;";
-                        
-                        // Hiển thị ngày dạng chuẩn để người dùng dễ nhìn
-                        const displayDate = `${String(day).padStart(2,'0')}/${String(month).padStart(2,'0')}`;
-
-                        item.innerHTML = `
-                            <div style="display:flex; align-items:center;">
-                                <input type="checkbox" class="src-cb" value="${src.id}" data-text="${displayDate} (${src.reason})" data-amt="${remaining}" onchange="calcTotalDays()">
-                                <div class="source-info">
-                                    <span class="source-date">${displayDate} - ${src.reason}</span>
-                                    <span class="source-val" style="${colorStyle}">${valDisplay}</span>
-                                </div>
-                            </div>
-                        `;
-                        listDiv.appendChild(item);
-                    }
-                });
-            } else {
-                listDiv.innerHTML = '<div style="padding:15px; text-align:center; color:#999;">Bạn không có ngày công bù nào.</div>';
-            }
-            
-            globalHistoryData = histRes.data || [];
-            renderHistory(globalHistoryData, false);
-            calcTotalDays();
-
-        } catch(e) { console.error(e); alert("Lỗi tải dữ liệu: " + e.message);
-        } finally { document.getElementById("loading").style.display = "none"; }
-    }
-
-    // --- GIỮ NGUYÊN HÀM RENDER HISTORY ---
-    function renderHistory(data, isFullView) {
-        const list = document.getElementById("historyList");
-        const btnContainer = document.getElementById("viewMoreContainer");
-        list.innerHTML = "";
-        
-        if (!data || data.length === 0) {
-            list.innerHTML = "<div style='text-align:center; color:#999; padding:10px;'>Chưa có lịch sử.</div>";
-            btnContainer.style.display = "none";
-            return;
-        }
-
-        let displayData = data;
-        const limit = 5;
-        const btnStyle = "background: white; border: 1px solid #0078d4; color: #0078d4; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 13px;";
-
-        if (data.length > limit) {
-            btnContainer.style.display = "block";
-            if (!isFullView) {
-                displayData = data.slice(0, limit);
-                btnContainer.innerHTML = `<button onclick="renderHistory(globalHistoryData, true)" style="${btnStyle}">↓ Xem toàn bộ lịch sử cũ hơn (${data.length - limit} còn lại)</button>`;
-            } else {
-                displayData = data; 
-                btnContainer.innerHTML = `<button onclick="renderHistory(globalHistoryData, false)" style="${btnStyle}">↑ Thu gọn danh sách</button>`;
-            }
-        } else { btnContainer.style.display = "none"; }
-
-        displayData.forEach(h => {
-			// 1. Xử lý Ngày tháng
-			const d = new Date(h.date);
-			const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-
-			// 2. Làm sạch lý do
-			//let cleanReason = h.reason || '';
-			//cleanReason = cleanReason.replace(/\[REF:\d+\]/g, "").replace(/\[Bù cho:.*?\]/g, "").trim(); 
-			//if (cleanReason === "" || cleanReason === "[]") cleanReason = "-";
-			// 2.1. Làm sạch lý do cơ bản (Xóa REF)
-			let cleanReason = h.reason || '';
-			cleanReason = cleanReason.replace(/\[REF:\d+\]/g, "").trim();
-
-			// 2.2. [MỚI] Định dạng lại chuỗi "Bù cho"
-			const buChoMatch = cleanReason.match(/\[Bù cho:.*?\((.*)\)\s*\](.*)/);
-
-			if (buChoMatch) {
-				// buChoMatch[1] = "Test(11/11/2025)" (Nội dung trong ngoặc sau ngày tháng)
-				// buChoMatch[2] = " test" (Phần dư phía sau)
-				
-				const source = buChoMatch[1].trim(); 
-				const userNote = buChoMatch[2].trim();
-
-				if (userNote) {
-					cleanReason = `[Bù cho: ${source}], lý do: ${userNote}`;
-				} else {
-					cleanReason = `[Bù cho: ${source}]`;
-				}
-			}
-
-			// 2.3. Xử lý nếu rỗng
-			if (cleanReason === "" || cleanReason === "[]") cleanReason = "-";
-
-			// 3. Xử lý Style cho LOẠI NGHỈ (P/NB)
-			let baseTypeStyle = "padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; margin-left:5px;";
-			let typeStyle = `background:#f3f4f6; color:#4b5563; border:1px solid #d1d5db; ${baseTypeStyle}`; // Mặc định
-
-			if (h.type && h.type.includes("P")) {
-				typeStyle = `background:#fce4ec; color:#ad1457; border:1px solid #f8bbd0; ${baseTypeStyle}`;
-			}
-			if (h.type && h.type.includes("NB")) {
-				typeStyle = `background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; ${baseTypeStyle}`;
-			}
-
-			// 4. Xử lý TRẠNG THÁI (Status) - Gộp logic phần 2 và phần 5 của bạn lại
-			let statusStyle = "background:#f3f4f6; color:#4b5563; border:1px solid #d1d5db"; // Mặc định xám
-			let statusIcon = "⏳";
-			let stText = h.status;
-			let btnCancel = "";
-
-			// -- Logic màu sắc trạng thái --
-			if (h.status === 'Đã duyệt') { 
-				statusStyle = "background:#dcfce7; color:#166534; border:1px solid #bbf7d0"; 
-				statusIcon = "✅";
-			}
-			else if (h.status === 'Từ chối' || (h.status && h.status.includes('Hủy'))) { 
-				statusStyle = "background:#fee2e2; color:#991b1b; border:1px solid #fca5a5"; 
-				statusIcon = "❌";
-				if (h.status === "Từ chối") stText = "Đã từ chối";
-			} 
-			else { // Chờ duyệt
-				statusStyle = "background:#ffedd5; color:#9a3412; border:1px solid #fed7aa";
-				// Chỉ hiện nút hủy khi đang chờ
-				//btnCancel = `<button class="btn-cancel" onclick="cancelRequest(${h.id})" style="margin-top:5px; font-size:11px; padding:3px 8px; background:#fff; border:1px solid #e74c3c; color:#e74c3c; border-radius:4px; cursor:pointer;">Hủy đơn</button>`;
-				btnCancel = `<button class="btn-cancel" onclick="cancelRequest(${h.id})">Hủy Yêu Cầu</button>`;
-			}
-
-			// CSS chung cho badge trạng thái
-			let finalStatusStyle = `padding:4px 8px; border-radius:20px; font-size:11px; font-weight:600; display:inline-block; ${statusStyle}`;
-
-			// 5. Render HTML
-			list.innerHTML += `
-				<li class="history-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #eee;">
-					<div>
-						<div style="font-weight:600; font-size:14px; margin-bottom:2px;">
-							${dateStr} 
-							<span style="${typeStyle}">${h.type}</span>
-						</div>
-						<div style="font-size:13px; color:#666; font-style:italic;">
-							${cleanReason}
-						</div>
-					</div>
-					<div style="text-align:right; min-width:100px;">
-						<span style="${finalStatusStyle}">
-							${statusIcon} ${stText}
-						</span>
-						<br>
-						${btnCancel}
-					</div>
-				</li>`;
-		});
-    }
-
-    // --- HÀM TÍNH TOÁN ---
-    function calcTotalDays() {
-        const type = document.getElementById("reqType").value;
-        const startStr = document.getElementById("reqStartDate").value;
-        const endStr = document.getElementById("reqEndDate").value;
-        const infoDiv = document.getElementById("calcInfo");
-        const groupNb = document.getElementById("groupNbSource");
-        
-        if (type.startsWith("NB")) {
-            groupNb.style.display = "block";
-        } else {
-            groupNb.style.display = "none";
-            document.querySelectorAll(".src-cb").forEach(cb => cb.checked = false); 
-        }
-
-        if (!startStr) {
-            infoDiv.style.display = "none"; globalNeededTotal = 0; updateSourceStatus(0); return;
-        }
-
-        const d1 = new Date(startStr);
-        const d2 = endStr ? new Date(endStr) : new Date(startStr);
-
-        if (d2 < d1) {
-            infoDiv.style.display = "block"; infoDiv.innerText = "⚠️ Ngày kết thúc lỗi!"; infoDiv.style.color = "red"; globalNeededTotal = 0; return;
-        }
-
-        const diffTime = Math.abs(d2 - d1);
-        const dayCount = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
-        const valPerDay = type.includes("/2") ? 0.5 : 1.0;
-        globalNeededTotal = dayCount * valPerDay;
-
-        infoDiv.style.display = "block";
-        infoDiv.style.color = "#0078d4";
-        infoDiv.innerHTML = `⏳ Bạn chọn <b>${dayCount} ngày</b>. <br>💰 Tổng trừ: <b>${globalNeededTotal}</b> công (${type}).`;
-
-        if (type.startsWith("NB")) updateSourceStatus(globalNeededTotal);
-    }
-
-    function updateSourceStatus(needed) {
-        const sumDiv = document.getElementById("sourceSummary");
-        if(needed === 0) { sumDiv.innerText=""; return; }
-
-        let selected = 0;
-        const checkedBoxes = document.querySelectorAll(".src-cb:checked");
-        checkedBoxes.forEach(cb => { selected += parseFloat(cb.getAttribute("data-amt")); });
-        
-        selected = parseFloat(selected.toFixed(2));
-        needed = parseFloat(needed.toFixed(2));
-
-        if(selected === needed) {
-            sumDiv.innerHTML = `✅ Đã chọn: ${selected} / Cần: ${needed} (Hợp lệ)`; sumDiv.className = "source-summary status-ok";
-        } else if (checkedBoxes.length === 1 && selected > needed) {
-            const remain = selected - needed;
-            sumDiv.innerHTML = `✂️ Tự động cắt: Dùng ${needed}, còn dư ${remain} (Hợp lệ)`; sumDiv.className = "source-summary status-ok";
-        } else if (selected > needed) {
-            sumDiv.innerHTML = `⚠️ Dư: ${selected} / Cần: ${needed} (Vui lòng bỏ bớt)`; sumDiv.className = "source-summary status-lack";
-        } else {
-            sumDiv.innerHTML = `❌ Thiếu: ${selected} / Cần: ${needed} (Chọn thêm)`; sumDiv.className = "source-summary status-lack";
-        }
-    }
-
-    // --- [ĐÃ SỬA] GỬI YÊU CẦU KÈM ID NGUỒN ---
-    async function submitRequest() {
-        const userCode = sessionStorage.getItem("empUser");
-        const empName = document.getElementById("dispName").innerText;
-        const type = document.getElementById("reqType").value;
-        const startStr = document.getElementById("reqStartDate").value;
-        const endStr = document.getElementById("reqEndDate").value || startStr;
-        let reasonInput = document.getElementById("reqReason").value.trim();
-
-        if (!startStr) return alert("Vui lòng chọn ngày bắt đầu!");
-        if (globalNeededTotal <= 0) return alert("Ngày không hợp lệ!");
-
-        const pTotal = parseFloat(document.getElementById("valTotal").innerText);
-        const bOld = parseFloat(document.getElementById("valBOld").innerText) || 0;
-        const bNew = parseFloat(document.getElementById("valBNew").innerText) || 0;
-        const bTotal = bOld + bNew;
-        const pOld = parseFloat(document.getElementById("valPOld").innerText) || 0;
-        const pNew = parseFloat(document.getElementById("valPNew").innerText) || 0;
-        const pnTotal = pOld + pNew;
-
-        if (type.startsWith("P") && pnTotal < globalNeededTotal) return alert(`Số dư Phép (${pnTotal}) không đủ.`);
-        if (type.startsWith("NB") && bTotal < globalNeededTotal) return alert(`Số dư Bù (${bTotal}) không đủ.`);
-
-        let finalReasonBase = reasonInput;
-        
-        if (type.startsWith("NB")) {
-            let selected = 0;
-            let sourceTexts = [];
-            const checkedBoxes = document.querySelectorAll(".src-cb:checked");
-
-            checkedBoxes.forEach(cb => {
-                selected += parseFloat(cb.getAttribute("data-amt"));
-                // --- LƯU ID VÀO CHUỖI ĐỂ SAU NÀY TÌM LẠI ĐƯỢC ---
-                // Format: [REF:123] 14/12 (Trực đêm)
-                const text = cb.getAttribute("data-text");
-                const id = cb.value; 
-                sourceTexts.push(`${text} [REF:${id}]`); 
-            });
-            
-            selected = parseFloat(selected.toFixed(2));
-
-            if (selected < globalNeededTotal) return alert(`⚠️ Chưa chọn đủ nguồn bù!`);
-            
-            if (selected > globalNeededTotal) {
-                if (checkedBoxes.length === 1) { /* OK */ } 
-                else { return alert(`⚠️ Chọn thừa nguồn bù!`); }
-            }
-
-            finalReasonBase = `[Bù cho: ${sourceTexts.join(", ")}] ${reasonInput}`;
-        }
-
-        if (!confirm(`Xác nhận đăng ký nghỉ từ ${startStr} đến ${endStr}?`)) return;
-
-        const btn = document.querySelector(".btn-submit");
-        btn.innerText = "Đang xử lý..."; btn.disabled = true;
-
-        try {
-            const checkEmp = await _supabase.from('employees').select('status').eq('code', userCode).single();
-            if (checkEmp.data && checkEmp.data.status === 'inactive') { alert("Bạn đã nghỉ việc!"); logout(); return; }
-		
-            const requests = [];
-            const startDate = new Date(startStr);
-            const endDate = new Date(endStr);
-            const valPerDay = type.includes("/2") ? 0.5 : 1.0;
-
-            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                const dateISO = d.toISOString().split('T')[0];
-                requests.push({
-                    emp_code: userCode, emp_name: empName, type: type, date: dateISO,
-                    reason: finalReasonBase, status: 'Chờ duyệt', val: valPerDay
-                });
-            }
-
-            const { error } = await _supabase.from('leave_requests').insert(requests);
-
-            if (error) throw error;
-
-            alert("✅ Đã gửi thành công!");
-            document.getElementById("reqStartDate").value = "";
-            document.getElementById("reqEndDate").value = "";
-            document.getElementById("reqReason").value = "";
-            document.getElementById("calcInfo").style.display = "none";
-            document.querySelectorAll(".src-cb").forEach(cb => cb.checked = false);
-            
-            loadData(userCode);
-
-        } catch(e) { console.error(e); alert("Lỗi: " + e.message); } 
-        finally { btn.innerText = "Gửi Yêu Cầu"; btn.disabled = false; }
-    }
-
-    async function cancelRequest(id) {
-        if(!confirm("Hủy yêu cầu này?")) return;
-        document.getElementById("loading").style.display = "block";
-        const userCode = sessionStorage.getItem("empUser");
-        try {
-            const { error } = await _supabase.from('leave_requests').delete().eq('id', id);
-            if (error) throw error;
-            alert("Đã hủy!"); loadData(userCode);
-        } catch(e) { alert("Lỗi: " + e.message); }
-        document.getElementById("loading").style.display = "none";
-    }
-
-    function setupRealtimeListener(userCode) {
-        _supabase.channel('employee-updates')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leave_requests', filter: `emp_code=eq.${userCode}` }, 
-            (payload) => {
-                const status = payload.new.status;
-                let msg = status === 'Đã duyệt' ? "✅ Đã được duyệt!" : (status === 'Từ chối' ? "❌ Bị từ chối." : "🔔 Trạng thái thay đổi.");
-                playNotificationSound(); showToastNotification(msg); loadData(userCode);
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leave_balance', filter: `emp_code=eq.${userCode}` }, 
-            () => { playNotificationSound(); showToastNotification("💰 Số dư phép thay đổi!"); loadData(userCode); })
-            .subscribe();
-    }
-
-    function playNotificationSound() {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.type = "sine"; osc.frequency.setValueAtTime(800, ctx.currentTime);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-        osc.start(); osc.stop(ctx.currentTime + 0.5);
-    }
-
-    function showToastNotification(mess) {
-        const div = document.createElement("div");
-        div.style.position = "fixed"; div.style.top = "20px"; div.style.right = "20px";
-        div.style.background = "#2c3e50"; div.style.color = "white"; div.style.padding = "15px 25px";
-        div.style.borderRadius = "50px"; div.style.boxShadow = "0 4px 15px rgba(0,0,0,0.2)";
-        div.style.zIndex = "9999"; div.style.fontWeight = "bold"; div.style.animation = "slideInRight 0.5s forwards";
-        div.innerText = mess; document.body.appendChild(div);
-        setTimeout(() => { div.style.opacity = "0"; div.style.transition="opacity 0.5s"; setTimeout(()=>div.remove(),500); }, 5000);
-    }
+    // 2. Link xem tồn kho (Google Sheet hoặc Web App)
+    const URL_STOCK = "https://bathinh008.github.io/tonkho/"; 
     
-    const styleSheet = document.createElement("style");
-    styleSheet.innerText = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`;
-    document.head.appendChild(styleSheet);
-	
-	// mới
-	function checkInstallation() {
-        // 1. KIỂM TRA ĐÃ CÀI CHƯA (STANDALONE MODE)
-        // iOS dùng navigator.standalone, Android/PC dùng display-mode
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-        
-        if (isStandalone) {
-            console.log("Đang chạy dạng App -> Không hiện banner.");
-            return; // Dừng lại, không làm gì cả
-        }
+    // 3. Link file Phép bù (Là link của file employee.html bạn đã up lên mạng)
+    const URL_EMPLOYEE = "https://bathinh008.github.io/LLVNV/"; 
 
-        // 2. KIỂM TRA NGƯỜI DÙNG ĐÃ TỪNG ĐÓNG CHƯA
-        // Nếu đã đóng rồi thì không làm phiền nữa
-        if (localStorage.getItem("dismissedInstallBanner") === "true") {
-            return;
-        }
+    // ==========================================
 
-        // 3. NẾU CHƯA CÀI & CHƯA ĐÓNG -> KIỂM TRA HỆ ĐIỀU HÀNH ĐỂ HIỆN HƯỚNG DẪN
-        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    // Gán link vào nút
+    document.getElementById("linkDate").href = URL_DATE;
+    document.getElementById("linkStock").href = URL_STOCK;
+    document.getElementById("linkEmployee").href = URL_EMPLOYEE;
+
+    // --- LOGIC BANNER CÀI ĐẶT (GIỮ NGUYÊN) ---
+    function checkInstallation() {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        if (isStandalone || localStorage.getItem("dismissedInstallBanner") === "true") return;
+
+        const ua = navigator.userAgent;
         const banner = document.getElementById("install-banner");
-        const guideText = document.getElementById("inst-guide-text");
+        const guide = document.getElementById("inst-guide-text");
         let show = false;
 
-        // Dành cho iPhone/iPad (iOS)
-        if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-            guideText.innerHTML = `
-                <h4>Cài đặt App vào máy</h4>
-                <p>Bấm vào nút <b>Chia sẻ</b> <span style='font-size:18px'>⎋</span> ở đáy màn hình, sau đó tìm và chọn <b>"Thêm vào MH chính"</b>.</p>
-            `;
+        if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) {
+            guide.innerHTML = `<h4>Cài App Trang Chủ</h4><p>Bấm nút <b>Chia sẻ</b> <i class="fas fa-share-square"></i> và chọn <b>"Thêm vào MH chính"</b>.</p>`;
             show = true;
-        } 
-        // Dành cho Android
-        else if (/android/i.test(userAgent)) {
-            guideText.innerHTML = `
-                <h4>Cài đặt App vào máy</h4>
-                <p>Bấm vào dấu <b>3 chấm</b> <span style='font-size:18px'>⋮</span> ở góc trên bên phải, chọn <b>"Thêm vào màn hình chính"</b>.</p>
-            `;
+        } else if (/android/i.test(ua)) {
+            guide.innerHTML = `<h4>Cài App Trang Chủ</h4><p>Bấm dấu <b>3 chấm</b> <i class="fas fa-ellipsis-v"></i> và chọn <b>"Thêm vào MH chính"</b>.</p>`;
             show = true;
         }
 
-        // Chỉ hiện nếu là điện thoại (Android/iOS)
-        if (show) {
-            setTimeout(() => {
-                banner.style.display = "block";
-            }, 2000); // Đợi 2 giây mới hiện cho đỡ giật mình
-        }
+        if (show) setTimeout(() => banner.style.display = "block", 2000);
     }
-
-    // Hàm đóng và nhớ lựa chọn
-    function closeBannerPermanently() {
+    function closeBanner() {
         document.getElementById("install-banner").style.display = "none";
-        // Lưu vào bộ nhớ trình duyệt để lần sau không hiện nữa
         localStorage.setItem("dismissedInstallBanner", "true");
     }
-
-    // Chạy kiểm tra
     checkInstallation();
 </script>
 
