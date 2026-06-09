@@ -1221,6 +1221,19 @@
 				</div>
 			</div>
 
+			<div class="px-4 py-3 border-b border-slate-100 bg-slate-50">
+				<div class="flex items-center justify-between gap-3">
+					<div>
+						<div class="text-sm font-bold text-slate-700">Thông báo điện thoại</div>
+						<div id="push-status-text" class="text-xs text-slate-500 mt-0.5">Chưa bật Web Push</div>
+					</div>
+					<button onclick="enablePhonePushNotifications()"
+						id="enable-push-btn"
+						class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl font-bold whitespace-nowrap">
+						Bật thông báo
+					</button>
+				</div>
+			</div>
 			<div id="notification-list" class="max-h-[70vh] overflow-y-auto divide-y divide-slate-100">
 				<div class="p-6 text-center text-slate-400 text-sm">
 					Chưa có thông báo
@@ -1262,6 +1275,8 @@
         
         const SUPABASE_URL = "https://fgujuuybphirvaebfgel.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZndWp1dXlicGhpcnZhZWJmZ2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwODEwNTAsImV4cCI6MjA4NjY1NzA1MH0.JJTnpEMvmOIUqCXFIJKx0yHCCNhmHc_wiMszw9UwkcI"; // Dán Anon Key của bạn vào đây
+        // Web Push: thay bằng VAPID public key của bạn sau khi tạo bằng lệnh: npx web-push generate-vapid-keys
+        const VAPID_PUBLIC_KEY = "THAY_VAPID_PUBLIC_KEY_VAO_DAY";
         
         let supabaseClient;
         try {
@@ -1526,6 +1541,172 @@
             );
         }
 
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        function isPushConfigured() {
+            return !!VAPID_PUBLIC_KEY && !VAPID_PUBLIC_KEY.includes('THAY_');
+        }
+
+        async function getServiceWorkerRegistration() {
+            if (!('serviceWorker' in navigator)) {
+                throw new Error('Trình duyệt này chưa hỗ trợ Service Worker.');
+            }
+            return await navigator.serviceWorker.register('/service-worker.js');
+        }
+
+        async function savePushSubscription(subscription) {
+            if (!subscription || !supabaseClient || !currentUser) return;
+
+            const json = subscription.toJSON();
+            const accountKey = getCurrentAccountKey();
+
+            const payload = {
+                endpoint: json.endpoint,
+                p256dh: json.keys?.p256dh || '',
+                auth: json.keys?.auth || '',
+                user_key: accountKey,
+                username: currentUser.username || currentUser.email || currentUser.id || '',
+                display_name: currentDisplayName || '',
+                user_role: currentRole || 'staff',
+                user_agent: navigator.userAgent || '',
+                active: true,
+                updated_at: new Date().toISOString()
+            };
+
+            const { error } = await supabaseClient
+                .from('push_subscriptions')
+                .upsert(payload, { onConflict: 'endpoint' });
+
+            if (error) throw error;
+        }
+
+        async function syncExistingPushSubscription() {
+            try {
+                if (!isPushConfigured() || Notification.permission !== 'granted') return;
+                const registration = await getServiceWorkerRegistration();
+                const existing = await registration.pushManager.getSubscription();
+                if (existing) await savePushSubscription(existing);
+                updatePushStatusUI();
+            } catch (error) {
+                console.warn('Không đồng bộ được push subscription:', error.message);
+            }
+        }
+
+        async function enablePhonePushNotifications() {
+            try {
+                if (!window.isSecureContext) {
+                    alert('Web Push cần chạy bằng HTTPS hoặc localhost. Hãy upload web lên hosting HTTPS trước.');
+                    return;
+                }
+
+                if (!('Notification' in window) || !('PushManager' in window)) {
+                    alert('Trình duyệt này chưa hỗ trợ Web Push Notification. Nên dùng Chrome/Edge Android hoặc PWA trên iOS 16.4+.');
+                    return;
+                }
+
+                if (!isPushConfigured()) {
+                    alert('Bạn chưa điền VAPID_PUBLIC_KEY trong file hang-loi/index.html. Hãy tạo khóa VAPID rồi thay vào trước.');
+                    return;
+                }
+
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    updatePushStatusUI();
+                    alert('Bạn chưa cấp quyền thông báo cho web/app.');
+                    return;
+                }
+
+                const registration = await getServiceWorkerRegistration();
+                let subscription = await registration.pushManager.getSubscription();
+
+                if (!subscription) {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                    });
+                }
+
+                await savePushSubscription(subscription);
+                updatePushStatusUI('Đã bật thông báo điện thoại cho thiết bị này');
+
+                registration.showNotification('Đã bật thông báo', {
+                    body: 'Thiết bị này sẽ nhận thông báo khi có hàng lỗi mới.',
+                    icon: '/icons/icon-192.png',
+                    badge: '/icons/icon-192.png',
+                    data: { url: '/hang-loi/' }
+                });
+            } catch (error) {
+                console.warn('Lỗi bật Web Push:', error);
+                updatePushStatusUI('Lỗi bật thông báo: ' + error.message);
+                alert('Lỗi bật thông báo: ' + error.message);
+            }
+        }
+
+        function updatePushStatusUI(customText) {
+            const statusEl = document.getElementById('push-status-text');
+            const btn = document.getElementById('enable-push-btn');
+            if (!statusEl || !btn) return;
+
+            if (!('Notification' in window) || !('PushManager' in window)) {
+                statusEl.innerText = 'Thiết bị/trình duyệt chưa hỗ trợ Web Push';
+                btn.disabled = true;
+                btn.classList.add('opacity-60');
+                return;
+            }
+
+            if (customText) {
+                statusEl.innerText = customText;
+                return;
+            }
+
+            if (!isPushConfigured()) {
+                statusEl.innerText = 'Chưa cấu hình VAPID key';
+                return;
+            }
+
+            if (Notification.permission === 'granted') {
+                statusEl.innerText = 'Đã cấp quyền thông báo';
+                btn.innerText = 'Bật lại';
+            } else if (Notification.permission === 'denied') {
+                statusEl.innerText = 'Đang bị chặn thông báo trong trình duyệt';
+            } else {
+                statusEl.innerText = 'Chưa bật thông báo trên thiết bị này';
+            }
+        }
+
+        async function sendWebPushForNotification(notification) {
+            if (!notification || notification.type !== 'defect_created') return;
+
+            try {
+                const { error } = await supabaseClient.functions.invoke('send-push', {
+                    body: {
+                        notification_id: notification.id,
+                        title: notification.title || 'Có hàng lỗi mới',
+                        body: notification.message || `${notification.product_name || 'Sản phẩm'} vừa được báo lỗi`,
+                        url: '/hang-loi/',
+                        type: notification.type,
+                        product_name: notification.product_name || '',
+                        sku: notification.sku || '',
+                        barcode: notification.barcode || '',
+                        defect_id: notification.defect_id || null
+                    }
+                });
+
+                if (error) console.warn('Chưa gửi được Web Push:', error.message);
+            } catch (error) {
+                console.warn('Edge Function send-push chưa sẵn sàng hoặc bị lỗi:', error.message);
+            }
+        }
+
         function playNotificationBeep() {
             try {
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -1720,6 +1901,8 @@
 
         async function refreshNotificationsAfterLogin() {
             await fetchNotifications(true);
+            updatePushStatusUI();
+            await syncExistingPushSubscription();
             startAutoRefresh();
         }
 
@@ -2009,7 +2192,7 @@
             }
 
             try {
-                const { error } = await supabaseClient
+                const { data: insertedNotification, error } = await supabaseClient
                     .from('notifications')
                     .insert([{
                         type,
@@ -2022,13 +2205,16 @@
                         barcode: defect.barcode || '',
                         defect_id: defect.id || null,
                         status: extra.status || defect.status || null
-                    }]);
+                    }])
+                    .select()
+                    .single();
 
                 if (error) {
                     console.warn('Không tạo được thông báo:', error.message);
                     return;
                 }
 
+                await sendWebPushForNotification(insertedNotification);
                 await fetchNotifications();
             } catch (error) {
                 console.warn('Lỗi tạo thông báo:', error.message);
