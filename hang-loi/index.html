@@ -21,7 +21,7 @@
     <!-- SheetJS for Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Camera Barcode Scanner -->
-    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-barcode-reader-bundle@11.4.2001/dist/dbr.bundle.js"></script>
+    <!-- Barcode Detector polyfill sẽ được nạp động bằng import() khi cần quét -->
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -828,7 +828,7 @@
         }
 
 
-        /* Dynamsoft camera view */
+        /* Barcode detector camera view */
         #barcode-reader {
             min-height: 320px;
         }
@@ -1953,11 +1953,6 @@
         const SUPABASE_URL = "https://fgujuuybphirvaebfgel.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZndWp1dXlicGhpcnZhZWJmZ2VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwODEwNTAsImV4cCI6MjA4NjY1NzA1MH0.JJTnpEMvmOIUqCXFIJKx0yHCCNhmHc_wiMszw9UwkcI"; // Dán Anon Key của bạn vào đây
         // Web Push: thay bằng VAPID public key của bạn sau khi tạo bằng lệnh: npx web-push generate-vapid-keys
-        
-        // Dynamsoft Barcode Reader license:
-        // Bản demo dùng license public của Dynamsoft trong tài liệu, chỉ phù hợp để test ngắn hạn.
-        // Khi chạy thật, thay bằng license 30 ngày hoặc license chính thức của bạn.
-        const DYNAMSOFT_LICENSE_KEY = "DLS2eyJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSJ9";
 
         const VAPID_PUBLIC_KEY = "BEvFCZMFzzESBkCKG1mMhgMl4u1z98Wy206w3-cbCTPRZopA-izDDdXcxW5091fCZz2lkOON8200tWKKOogwlWw";
         
@@ -4435,16 +4430,18 @@
         
 
 
-        let dynamsoftCvRouter = null;
-        let dynamsoftCameraView = null;
-        let dynamsoftCameraEnhancer = null;
-        let dynamsoftScanFilter = null;
+        let barcodeDetectorCtor = null;
+        let barcodeDetectorInstance = null;
+        let barcodeVideoEl = null;
+        let barcodeCanvasEl = null;
+        let barcodeCanvasCtx = null;
+        let barcodeScannerStream = null;
+        let barcodeDetectLoopTimer = null;
         let barcodeScannerRunning = false;
         let barcodeScannerLocked = false;
         let barcodeScanCandidate = '';
         let barcodeScanCandidateCount = 0;
         let barcodeScanLastAt = 0;
-        let dynamsoftInitialized = false;
 
         function setBarcodeScanStatus(message, type = 'info') {
             const el = document.getElementById('barcode-scan-status');
@@ -4511,56 +4508,105 @@
             barcodeInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
-        async function initDynamsoftBarcodeReader() {
-            if (dynamsoftInitialized) return;
+        async function ensureBarcodeDetectorSupport() {
+            if (barcodeDetectorCtor) return barcodeDetectorCtor;
 
-            if (typeof Dynamsoft === 'undefined') {
-                throw new Error('Chưa tải được Dynamsoft Barcode Reader. Kiểm tra Internet hoặc CDN.');
+            if ('BarcodeDetector' in window) {
+                barcodeDetectorCtor = window.BarcodeDetector;
+                return barcodeDetectorCtor;
             }
 
-            Dynamsoft.License.LicenseManager.initLicense(DYNAMSOFT_LICENSE_KEY);
-            Dynamsoft.Core.CoreModule.engineResourcePaths.rootDirectory = "https://cdn.jsdelivr.net/npm/";
+            setBarcodeScanStatus('Đang tải thư viện barcode-detector...');
+            try {
+                const mod = await import('https://cdn.jsdelivr.net/npm/barcode-detector@2/dist/es/index.min.js');
+                barcodeDetectorCtor =
+                    mod.BarcodeDetector ||
+                    mod.default?.BarcodeDetector ||
+                    mod.default ||
+                    window.BarcodeDetector;
 
-            setBarcodeScanStatus('Đang tải bộ đọc mã vạch Dynamsoft...');
-            await Dynamsoft.Core.CoreModule.loadWasm();
-
-            dynamsoftCvRouter = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
-            dynamsoftCameraView = await Dynamsoft.DCE.CameraView.createInstance();
-            dynamsoftCameraEnhancer = await Dynamsoft.DCE.CameraEnhancer.createInstance(dynamsoftCameraView);
-
-            const reader = document.getElementById('barcode-reader');
-            if (reader) {
-                reader.innerHTML = '';
-                reader.appendChild(dynamsoftCameraView.getUIElement());
-            }
-
-            dynamsoftCvRouter.setInput(dynamsoftCameraEnhancer);
-
-            await dynamsoftCvRouter.addResultReceiver({
-                onDecodedBarcodesReceived: (result) => {
-                    if (barcodeScannerLocked) return;
-
-                    const items = result?.barcodeResultItems || [];
-                    if (!items.length) return;
-
-                    const preferred = items.find(item => {
-                        const format = String(item.formatString || '').toUpperCase();
-                        return ['EAN_13', 'EAN-13', 'EAN_8', 'EAN-8', 'UPC_A', 'UPC-A', 'UPC_E', 'UPC-E'].includes(format);
-                    }) || items[0];
-
-                    handleDynamsoftDecodedText(preferred.text || '');
+                if (!barcodeDetectorCtor) {
+                    throw new Error('Không khởi tạo được BarcodeDetector từ CDN.');
                 }
-            });
 
-            dynamsoftScanFilter = new Dynamsoft.Utility.MultiFrameResultCrossFilter();
-            dynamsoftScanFilter.enableResultCrossVerification("barcode", true);
-            dynamsoftScanFilter.enableResultDeduplication("barcode", true);
-            await dynamsoftCvRouter.addResultFilter(dynamsoftScanFilter);
-
-            dynamsoftInitialized = true;
+                return barcodeDetectorCtor;
+            } catch (error) {
+                console.error('Lỗi tải barcode-detector polyfill:', error);
+                throw new Error('Không tải được barcode-detector. Kiểm tra Internet hoặc trình duyệt.');
+            }
         }
 
-        function handleDynamsoftDecodedText(decodedText) {
+        async function createBarcodeDetectorInstance() {
+            const Detector = await ensureBarcodeDetectorSupport();
+
+            let formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+            try {
+                if (typeof Detector.getSupportedFormats === 'function') {
+                    const supported = await Detector.getSupportedFormats();
+                    const desired = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+                    const filtered = desired.filter(f => supported.includes(f));
+                    if (filtered.length) formats = filtered;
+                }
+            } catch (error) {
+                console.warn('Không lấy được supported formats, dùng mặc định.', error);
+            }
+
+            return new Detector({ formats });
+        }
+
+        function buildBarcodeVideoUI() {
+            const mount = document.getElementById('barcode-reader');
+            if (!mount) return;
+
+            mount.innerHTML = '';
+
+            barcodeVideoEl = document.createElement('video');
+            barcodeVideoEl.setAttribute('playsinline', 'true');
+            barcodeVideoEl.setAttribute('autoplay', 'true');
+            barcodeVideoEl.setAttribute('muted', 'true');
+            barcodeVideoEl.className = 'w-full h-full object-cover rounded-xl';
+
+            const guide = document.createElement('div');
+            guide.className = 'absolute inset-0 pointer-events-none flex items-center justify-center';
+            guide.innerHTML = `
+                <div class="w-[92%] h-[28%] border-2 border-white/90 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.18)]"></div>
+            `;
+
+            mount.appendChild(barcodeVideoEl);
+            mount.appendChild(guide);
+
+            barcodeCanvasEl = document.createElement('canvas');
+            barcodeCanvasCtx = barcodeCanvasEl.getContext('2d', { willReadFrequently: true });
+        }
+
+        async function startBarcodeDetectLoop() {
+            if (!barcodeDetectorInstance) {
+                barcodeDetectorInstance = await createBarcodeDetectorInstance();
+            }
+
+            clearInterval(barcodeDetectLoopTimer);
+
+            barcodeDetectLoopTimer = setInterval(async () => {
+                if (!barcodeScannerRunning || barcodeScannerLocked || !barcodeVideoEl) return;
+                if (barcodeVideoEl.readyState < 2) return;
+
+                try {
+                    const barcodes = await barcodeDetectorInstance.detect(barcodeVideoEl);
+                    if (!barcodes || !barcodes.length) return;
+
+                    const preferred = barcodes.find(item => {
+                        const format = String(item.format || '').toLowerCase();
+                        return ['ean_13', 'ean_8', 'upc_a', 'upc_e'].includes(format);
+                    }) || barcodes[0];
+
+                    handleDetectedBarcodeValue(preferred.rawValue || '');
+                } catch (error) {
+                    console.warn('Lỗi detect barcode:', error);
+                }
+            }, 180);
+        }
+
+        function handleDetectedBarcodeValue(decodedText) {
             const code = normalizeBarcodeText(decodedText);
             const now = Date.now();
 
@@ -4580,7 +4626,7 @@
 
             const catalogReady = Array.isArray(catalogData) && catalogData.length > 0;
             const foundInCatalog = isBarcodeInCatalog(code);
-            const requiredCount = foundInCatalog ? 1 : 2;
+            const requiredCount = foundInCatalog ? 2 : 3;
 
             if (catalogReady && !foundInCatalog) {
                 setBarcodeScanStatus(`Đọc được ${code} nhưng chưa có trong danh mục. Giữ yên thêm để xác nhận (${barcodeScanCandidateCount}/${requiredCount}).`, 'warning');
@@ -4611,7 +4657,7 @@
             modal.classList.remove('hidden');
             barcodeScannerLocked = false;
             resetBarcodeScanConfirm();
-            setBarcodeScanStatus('Đang mở camera Dynamsoft...');
+            setBarcodeScanStatus('Đang mở camera quét mã vạch...');
 
             if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1' && location.protocol !== 'file:') {
                 setBarcodeScanStatus('Trình duyệt chỉ cho quét camera khi web chạy HTTPS hoặc localhost.', 'error');
@@ -4619,15 +4665,27 @@
             }
 
             try {
-                await initDynamsoftBarcodeReader();
+                buildBarcodeVideoUI();
+                await ensureBarcodeDetectorSupport();
+                barcodeDetectorInstance = await createBarcodeDetectorInstance();
 
-                await dynamsoftCameraEnhancer.open();
-                await dynamsoftCvRouter.startCapturing("ReadSingleBarcode");
+                barcodeScannerStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                });
+
+                barcodeVideoEl.srcObject = barcodeScannerStream;
+                await barcodeVideoEl.play();
 
                 barcodeScannerRunning = true;
-                setBarcodeScanStatus('Camera Dynamsoft đã sẵn sàng. Đưa mã vạch nằm ngang vào giữa khung.');
+                setBarcodeScanStatus('Camera đã sẵn sàng. Đưa mã vạch nằm ngang vào giữa khung.');
+                await startBarcodeDetectLoop();
             } catch (error) {
-                console.error('Lỗi mở Dynamsoft Barcode Reader:', error);
+                console.error('Lỗi mở barcode-detector:', error);
                 setBarcodeScanStatus(error.message || 'Không mở được camera. Hãy cấp quyền Camera rồi thử lại.', 'error');
             }
         }
@@ -4635,18 +4693,23 @@
         async function closeBarcodeScanner() {
             const modal = document.getElementById('modal-barcode-scanner');
 
+            clearInterval(barcodeDetectLoopTimer);
+            barcodeDetectLoopTimer = null;
+
             try {
-                if (dynamsoftCvRouter && barcodeScannerRunning) {
-                    await dynamsoftCvRouter.stopCapturing();
+                if (barcodeVideoEl) {
+                    barcodeVideoEl.pause();
+                    barcodeVideoEl.srcObject = null;
                 }
 
-                if (dynamsoftCameraEnhancer && barcodeScannerRunning) {
-                    dynamsoftCameraEnhancer.close();
+                if (barcodeScannerStream) {
+                    barcodeScannerStream.getTracks().forEach(track => track.stop());
                 }
             } catch (error) {
-                console.warn('Không dừng được Dynamsoft camera hoặc camera đã dừng:', error);
+                console.warn('Không dừng được camera barcode:', error);
             }
 
+            barcodeScannerStream = null;
             barcodeScannerRunning = false;
             barcodeScannerLocked = false;
             resetBarcodeScanConfirm();
