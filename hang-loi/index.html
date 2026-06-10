@@ -828,10 +828,6 @@
         }
 
 
-        /* Barcode detector camera view */
-        #barcode-reader {
-            min-height: 320px;
-        }
 
         #barcode-reader video,
         #barcode-reader canvas {
@@ -841,6 +837,36 @@
         @media (max-width: 768px) {
             #barcode-reader {
                 min-height: 300px;
+            }
+        }
+
+
+        /* Barcode scanner: giới hạn khung camera, tránh vỡ layout */
+        #modal-barcode-scanner #barcode-reader {
+            width: 100%;
+            height: min(52vh, 360px);
+            max-height: 360px;
+            min-height: 220px;
+            aspect-ratio: 16 / 9;
+            position: relative;
+        }
+
+        #modal-barcode-scanner #barcode-reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            #modal-barcode-scanner #barcode-reader {
+                height: min(42vh, 280px);
+                max-height: 280px;
+                min-height: 200px;
+            }
+
+            #modal-barcode-scanner .max-w-md {
+                max-width: 96vw;
             }
         }
 
@@ -1576,8 +1602,8 @@
 
 
     <!-- Modal: Quét mã vạch bằng máy ảnh -->
-    <div id="modal-barcode-scanner" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[95] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in">
+    <div id="modal-barcode-scanner" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[95] hidden flex items-center justify-center p-3">
+        <div class="bg-white rounded-2xl w-full max-w-md max-h-[92vh] shadow-2xl overflow-hidden animate-in flex flex-col">
             <div class="flex items-center justify-between p-4 border-b">
                 <div>
                     <h2 class="text-lg font-bold text-slate-800">Quét mã vạch</h2>
@@ -1588,13 +1614,13 @@
                 </button>
             </div>
 
-            <div class="p-4 space-y-3">
-                <div id="barcode-reader" class="w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-900"></div>
+            <div class="p-4 space-y-3 overflow-y-auto">
+                <div id="barcode-reader" class="w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-900 relative"></div>
                 <div id="barcode-scan-status" class="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
                     Đang chuẩn bị camera...
                 </div>
                 <div class="text-xs text-slate-400 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
-                    Mẹo: giữ mã vạch thẳng, đủ sáng và nằm ngang trong khung. Hệ thống sẽ chỉ nhận khi mã đọc ổn định.
+                    Mẹo: giữ mã vạch thẳng, đủ sáng và nằm ngang trong khung để đọc chính xác hơn.
                 </div>
                 <button type="button" onclick="closeBarcodeScanner()"
                     class="w-full py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">
@@ -4607,47 +4633,19 @@
         }
 
         function handleDetectedBarcodeValue(decodedText) {
-            const code = normalizeBarcodeText(decodedText);
-            const now = Date.now();
+            if (barcodeScannerLocked) return;
 
-            if (!code || !isValidGtinChecksum(code)) {
-                setBarcodeScanStatus('Mã đọc chưa hợp lệ, giữ camera ổn định và quét lại...', 'warning');
+            const code = normalizeBarcodeText(decodedText);
+
+            if (!code) {
+                setBarcodeScanStatus('Chưa đọc được mã, giữ camera ổn định và quét lại...', 'warning');
                 return;
             }
-
-            if (barcodeScanCandidate !== code || now - barcodeScanLastAt > 1800) {
-                barcodeScanCandidate = code;
-                barcodeScanCandidateCount = 1;
-            } else {
-                barcodeScanCandidateCount++;
-            }
-
-            barcodeScanLastAt = now;
-
-            const catalogReady = Array.isArray(catalogData) && catalogData.length > 0;
-            const foundInCatalog = isBarcodeInCatalog(code);
-            const requiredCount = foundInCatalog ? 2 : 3;
-
-            if (catalogReady && !foundInCatalog) {
-                setBarcodeScanStatus(`Đọc được ${code} nhưng chưa có trong danh mục. Giữ yên thêm để xác nhận (${barcodeScanCandidateCount}/${requiredCount}).`, 'warning');
-            } else {
-                setBarcodeScanStatus(`Đang xác nhận mã ${code} (${barcodeScanCandidateCount}/${requiredCount})...`);
-            }
-
-            if (barcodeScanCandidateCount < requiredCount) return;
 
             barcodeScannerLocked = true;
-
-            if (catalogReady && !foundInCatalog) {
-                setBarcodeScanStatus(`Mã ${code} đọc ổn định nhưng không có trong danh mục. Không tự điền để tránh sai.`, 'warning');
-                barcodeScannerLocked = false;
-                resetBarcodeScanConfirm();
-                return;
-            }
-
-            setBarcodeScanStatus('✓ Đã xác nhận mã: ' + code, 'success');
+            setBarcodeScanStatus('✓ Đã quét được: ' + code, 'success');
             fillBarcodeFromCamera(code);
-            setTimeout(() => closeBarcodeScanner(), 450);
+            setTimeout(() => closeBarcodeScanner(), 350);
         }
 
         async function openBarcodeScanner() {
@@ -4682,7 +4680,7 @@
                 await barcodeVideoEl.play();
 
                 barcodeScannerRunning = true;
-                setBarcodeScanStatus('Camera đã sẵn sàng. Đưa mã vạch nằm ngang vào giữa khung.');
+                setBarcodeScanStatus('Camera đã sẵn sàng. Quét được mã sẽ tự điền ngay.');
                 await startBarcodeDetectLoop();
             } catch (error) {
                 console.error('Lỗi mở barcode-detector:', error);
