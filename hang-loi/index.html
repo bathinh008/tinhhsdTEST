@@ -870,6 +870,54 @@
             }
         }
 
+
+
+        /* Mobile: ẩn nút nổi khi đang xem ảnh */
+        @media (max-width: 768px) {
+            body.image-modal-open #mobile-new-defect-btn,
+            body.image-modal-open #scroll-top-btn,
+            body.image-modal-open button[onclick*="scrollToTop"],
+            body.image-modal-open .scroll-top-btn {
+                display: none !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+            }
+
+            body:has(#modal-image:not(.hidden)) #mobile-new-defect-btn,
+            body:has(#modal-image:not(.hidden)) #scroll-top-btn,
+            body:has(#modal-image:not(.hidden)) button[onclick*="scrollToTop"],
+            body:has(#modal-image:not(.hidden)) .scroll-top-btn {
+                display: none !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+            }
+        }
+
+
+        /* Mobile: chặn kéo xuống tải lại trang và tối ưu vuốt tab */
+        @media (max-width: 768px) {
+            html,
+            body {
+                overscroll-behavior-y: none;
+                overscroll-behavior-x: none;
+                touch-action: pan-y;
+            }
+
+            body {
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .bottom-tab-bar,
+            #modal-image,
+            #modal-defect,
+            #modal-barcode-scanner,
+            #modal-password-change {
+                overscroll-behavior: contain;
+            }
+        }
+
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen pb-20 md:pb-0">
@@ -4411,13 +4459,20 @@
 			const fileName = `defect_${new Date().getTime()}.jpg`;
 			downloadLink.setAttribute('download', fileName);
 
-			modal.classList.remove('hidden');
+
+			toggleImageModal(true);
 		}
 
 		function toggleImageModal(show) {
 			const modal = document.getElementById('modal-image');
-			if (!show) {
+			if (!modal) return;
+
+			if (show) {
+				modal.classList.remove('hidden');
+				document.body.classList.add('image-modal-open');
+			} else {
 				modal.classList.add('hidden');
+				document.body.classList.remove('image-modal-open');
 				document.getElementById('full-res-image').src = ''; // Clear src để tránh giật hình khi mở lại
 			}
 		}
@@ -4719,51 +4774,70 @@
         document.getElementById('auto-barcode').oninput = async (e) => {
 			const val = e.target.value.trim();
 			const statusMsg = document.getElementById('search-status');
-			
+
+			const setSearchStatus = (message, type = 'info') => {
+				if (!statusMsg) return;
+
+				statusMsg.innerText = message || '';
+				statusMsg.classList.remove(
+					'hidden',
+					'text-blue-600',
+					'text-orange-500',
+					'text-slate-400',
+					'text-red-500',
+					'text-green-600'
+				);
+
+				if (!message) {
+					statusMsg.classList.add('hidden');
+					return;
+				}
+
+				if (type === 'success') statusMsg.classList.add('text-blue-600');
+				else if (type === 'warning') statusMsg.classList.add('text-orange-500');
+				else if (type === 'error') statusMsg.classList.add('text-red-500');
+				else statusMsg.classList.add('text-slate-400');
+			};
+
 			// Nếu xóa trắng ô barcode thì xóa trắng các ô thông tin
 			if (!val) { 
-				statusMsg.classList.add('hidden'); 
+				setSearchStatus('');
 				resetDefectFields();
 				return; 
 			}
 
 			// 1. Tìm nhanh trong catalogData (dữ liệu đã load sẵn)
-			let found = catalogData.find(c => c.barcode === val);
+			let found = catalogData.find(c => String(c.barcode || '').trim() === val);
 
 			// 2. Nếu không thấy trong máy, thử truy vấn trực tiếp từ Supabase
 			if (!found && supabaseClient) {
-				statusMsg.innerText = "Đang tìm trong danh mục...";
-				statusMsg.classList.remove('hidden', 'text-blue-600');
-				statusMsg.classList.add('text-slate-400');
+				setSearchStatus("Đang tìm trong danh mục...", 'info');
 
 				const { data, error } = await supabaseClient
 					.from('catalog')
 					.select('*')
 					.eq('barcode', val)
 					.single();
-				
+
 				if (data) found = data;
 			}
 
 			// 3. Hiển thị kết quả
 			if (found) {
-					const supplier = normalizeSupplierFields(found);
-					document.getElementById('f-product_name').value = found.product_name || '';
-					document.getElementById('f-sku').value = found.sku || '';
-					document.getElementById('f-vendor_name').value = supplier.vendor_name;
-					document.getElementById('f-vendor_id').value = supplier.vendor_id;
-					document.getElementById('f-barcode').value = found.barcode || val;
-				
-				statusMsg.innerText = "✓ Đã tìm thấy thông tin!";
-				statusMsg.classList.remove('hidden', 'text-slate-400');
-				statusMsg.classList.add('text-blue-600');
+				const supplier = normalizeSupplierFields(found);
+				document.getElementById('f-product_name').value = found.product_name || '';
+				document.getElementById('f-sku').value = found.sku || '';
+				document.getElementById('f-vendor_name').value = supplier.vendor_name;
+				document.getElementById('f-vendor_id').value = supplier.vendor_id;
+				document.getElementById('f-barcode').value = found.barcode || val;
+
+				setSearchStatus("✓ Đã tìm thấy thông tin!", 'success');
 			} else {
-				statusMsg.innerText = "⚠ Không tìm thấy trong danh mục";
-				statusMsg.classList.remove('text-blue-600');
-				statusMsg.classList.add('text-orange-500');
+				setSearchStatus("⚠ Không tìm thấy trong danh mục", 'warning');
 				// Không reset fields ở đây để người dùng có thể tự nhập tay nếu là hàng mới
 			}
 		};
+
 
 		// Hàm hỗ trợ xóa trắng form
 		function resetDefectFields() {
@@ -5544,6 +5618,113 @@
         }
 
 
-		</script>
+		
+        // Mobile: chặn pull-to-refresh và vuốt trái/phải để chuyển tab kế bên
+        (function setupMobileSwipeTabsAndPullGuard() {
+            if (window.__mobileSwipeTabsAndPullGuardReady) return;
+            window.__mobileSwipeTabsAndPullGuardReady = true;
+
+            const mobileTabs = ['dashboard', 'history', 'catalog', 'users', 'logs'];
+            let startX = 0;
+            let startY = 0;
+            let startTime = 0;
+            let maybePullingDown = false;
+
+            function isMobileViewport() {
+                return window.matchMedia('(max-width: 768px)').matches;
+            }
+
+            function isInteractiveTarget(target) {
+                return !!target.closest(
+                    'input, textarea, select, button, a, label, [contenteditable="true"], ' +
+                    '#modal-image, #modal-defect, #modal-catalog, #modal-barcode-scanner, #modal-password-change, ' +
+                    '.excel-filter-menu, .bottom-tab-bar'
+                );
+            }
+
+            function getCurrentMobileTab() {
+                const activeBodyClass = [...document.body.classList].find(cls => cls.startsWith('active-tab-'));
+                if (activeBodyClass) {
+                    const tab = activeBodyClass.replace('active-tab-', '');
+                    if (mobileTabs.includes(tab)) return tab;
+                }
+
+                const activeView = document.querySelector('.view:not(.hidden)');
+                if (activeView && activeView.id) {
+                    return activeView.id.replace('view-', '');
+                }
+
+                return 'dashboard';
+            }
+
+            function goToAdjacentTab(direction) {
+                const current = getCurrentMobileTab();
+                const index = mobileTabs.indexOf(current);
+                if (index === -1) return;
+
+                const nextIndex = index + direction;
+                if (nextIndex < 0 || nextIndex >= mobileTabs.length) return;
+
+                if (typeof window.switchTab === 'function') {
+                    window.switchTab(mobileTabs[nextIndex]);
+                }
+            }
+
+            document.addEventListener('touchstart', function(e) {
+                if (!isMobileViewport() || e.touches.length !== 1) return;
+
+                const touch = e.touches[0];
+                startX = touch.clientX;
+                startY = touch.clientY;
+                startTime = Date.now();
+                maybePullingDown = window.scrollY <= 0 && startY < 90;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', function(e) {
+                if (!isMobileViewport() || e.touches.length !== 1) return;
+
+                const touch = e.touches[0];
+                const deltaY = touch.clientY - startY;
+                const deltaX = touch.clientX - startX;
+
+                // Chặn kéo xuống ở đầu trang để tránh browser refresh.
+                if (maybePullingDown && window.scrollY <= 0 && deltaY > 8 && Math.abs(deltaY) > Math.abs(deltaX)) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchend', function(e) {
+                if (!isMobileViewport()) return;
+                if (!startTime) return;
+
+                const target = e.target;
+                if (isInteractiveTarget(target)) return;
+
+                const touch = e.changedTouches && e.changedTouches[0];
+                if (!touch) return;
+
+                const deltaX = touch.clientX - startX;
+                const deltaY = touch.clientY - startY;
+                const elapsed = Date.now() - startTime;
+
+                startTime = 0;
+
+                // Vuốt ngang đủ dài, không quá chéo, không quá chậm.
+                if (elapsed > 650) return;
+                if (Math.abs(deltaX) < 70) return;
+                if (Math.abs(deltaX) < Math.abs(deltaY) * 1.35) return;
+
+                if (deltaX < 0) {
+                    // Vuốt trái: sang tab kế bên bên phải.
+                    goToAdjacentTab(1);
+                } else {
+                    // Vuốt phải: về tab kế bên bên trái.
+                    goToAdjacentTab(-1);
+                }
+            }, { passive: true });
+        })();
+
+
+</script>
 </body>
 </html>
