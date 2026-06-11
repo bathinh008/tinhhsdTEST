@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trangchu-noibo-v2-push';
+const CACHE_NAME = 'trangchu-noibo-v3-pwa-badge';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -10,6 +10,92 @@ const APP_SHELL = [
   '/icons/icon-512.png'
 ];
 
+const BADGE_DB_NAME = 'trangchu-pwa-badge-db';
+const BADGE_DB_VERSION = 1;
+const BADGE_STORE = 'badge_state';
+const BADGE_KEY = 'notification_count';
+const BADGE_MAX_COUNT = 99;
+
+function normalizeBadgeCount(count) {
+  const value = Number(count);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(Math.floor(value), BADGE_MAX_COUNT);
+}
+
+function openBadgeDb() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in self)) return resolve(null);
+
+    const request = indexedDB.open(BADGE_DB_NAME, BADGE_DB_VERSION);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(BADGE_STORE)) db.createObjectStore(BADGE_STORE);
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getStoredBadgeCount() {
+  const db = await openBadgeDb().catch(() => null);
+  if (!db) return 0;
+
+  return new Promise(resolve => {
+    const tx = db.transaction(BADGE_STORE, 'readonly');
+    const store = tx.objectStore(BADGE_STORE);
+    const request = store.get(BADGE_KEY);
+
+    request.onsuccess = () => resolve(normalizeBadgeCount(request.result || 0));
+    request.onerror = () => resolve(0);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+async function saveStoredBadgeCount(count) {
+  const badgeCount = normalizeBadgeCount(count);
+  const db = await openBadgeDb().catch(() => null);
+  if (!db) return badgeCount;
+
+  return new Promise(resolve => {
+    const tx = db.transaction(BADGE_STORE, 'readwrite');
+    const store = tx.objectStore(BADGE_STORE);
+    store.put(badgeCount, BADGE_KEY);
+    tx.oncomplete = () => {
+      db.close();
+      resolve(badgeCount);
+    };
+    tx.onerror = () => {
+      db.close();
+      resolve(badgeCount);
+    };
+  });
+}
+
+async function applyAppBadge(count) {
+  const badgeCount = await saveStoredBadgeCount(count);
+
+  try {
+    if (!self.registration) return badgeCount;
+
+    if (badgeCount > 0 && 'setAppBadge' in self.registration) {
+      await self.registration.setAppBadge(badgeCount);
+    } else if (badgeCount <= 0 && 'clearAppBadge' in self.registration) {
+      await self.registration.clearAppBadge();
+    }
+  } catch (error) {
+    console.warn('Không cập nhật được badge PWA từ Service Worker:', error?.message || error);
+  }
+
+  return badgeCount;
+}
+
+async function increaseAppBadge() {
+  const current = await getStoredBadgeCount();
+  return applyAppBadge(current + 1);
+}
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).catch(() => null)
@@ -18,10 +104,11 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(key => key !== CACHE_NAME ? caches.delete(key) : null)))
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    await caches.keys().then(keys => Promise.all(keys.map(key => key !== CACHE_NAME ? caches.delete(key) : null)));
+    await applyAppBadge(await getStoredBadgeCount());
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', event => {
@@ -33,6 +120,13 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request).then(res => res || caches.match('/index.html')))
   );
+});
+
+self.addEventListener('message', event => {
+  const data = event.data || {};
+  if (data.type !== 'PWA_BADGE_SET') return;
+
+  event.waitUntil(applyAppBadge(data.count || 0));
 });
 
 self.addEventListener('push', event => {
@@ -62,7 +156,15 @@ self.addEventListener('push', event => {
     }
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil((async () => {
+    if (data.badge_count !== undefined || data.unread_count !== undefined) {
+      await applyAppBadge(data.badge_count ?? data.unread_count);
+    } else {
+      await increaseAppBadge();
+    }
+
+    await self.registration.showNotification(title, options);
+  })());
 });
 
 self.addEventListener('notificationclick', event => {
