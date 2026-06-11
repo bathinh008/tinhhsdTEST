@@ -579,9 +579,9 @@ let defectsData = [];
 
                 registration.showNotification('Đã bật thông báo', {
                     body: 'Thiết bị này sẽ nhận thông báo khi có hàng lỗi mới.',
-                    icon: '/icons/icon-192.png',
-                    badge: '/icons/icon-192.png',
-                    data: { url: '/hang-loi/' }
+                    icon: new URL('../icons/icon-192.png', window.location.href).href,
+                    badge: new URL('../icons/icon-192.png', window.location.href).href,
+                    data: { url: 'hang-loi/' }
                 });
             } catch (error) {
                 console.warn('Lỗi bật Web Push:', error);
@@ -631,7 +631,7 @@ let defectsData = [];
                         notification_id: notification.id,
                         title: notification.title || 'Có hàng lỗi mới',
                         body: notification.message || `${notification.product_name || 'Sản phẩm'} vừa được báo lỗi`,
-                        url: '/hang-loi/',
+                        url: 'hang-loi/',
                         type: notification.type,
                         product_name: notification.product_name || '',
                         sku: notification.sku || '',

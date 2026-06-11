@@ -1,14 +1,40 @@
-const CACHE_NAME = 'trangchu-noibo-v3-pwa-badge';
+const CACHE_NAME = 'trangchu-noibo-v4-fix-notification-click';
+
+// Lấy đúng thư mục gốc của PWA theo scope.
+// Ví dụ:
+// - Domain riêng: https://abc.com/              => scope /
+// - GitHub Pages: https://abc.github.io/app/   => scope /app/
+const APP_SCOPE_URL = new URL(self.registration?.scope || './', self.location.href);
+
+function resolveAppUrl(target = './') {
+  try {
+    const raw = String(target || './').trim();
+
+    // Cho phép URL đầy đủ cùng domain. Nếu khác domain thì quay về trang chủ app để an toàn.
+    if (/^https?:\/\//i.test(raw)) {
+      const fullUrl = new URL(raw);
+      return fullUrl.origin === self.location.origin ? fullUrl.href : APP_SCOPE_URL.href;
+    }
+
+    // Quan trọng: nếu payload gửi kiểu /hang-loi/ thì coi nó là đường dẫn trong app,
+    // không mở từ gốc domain. Fix lỗi app nằm trong thư mục con như /trangchu-main/.
+    const cleanPath = raw.startsWith('/') ? raw.replace(/^\/+/, '') : raw;
+    return new URL(cleanPath || './', APP_SCOPE_URL).href;
+  } catch (error) {
+    return APP_SCOPE_URL.href;
+  }
+}
+
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/admin.html',
-  '/hang-loi/',
-  '/hang-loi/index.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png'
-];
+  './',
+  'index.html',
+  'admin.html',
+  'hang-loi/',
+  'hang-loi/index.html',
+  'manifest.json',
+  'icons/icon-192.png',
+  'icons/icon-512.png'
+].map(resolveAppUrl);
 
 const BADGE_DB_NAME = 'trangchu-pwa-badge-db';
 const BADGE_DB_VERSION = 1;
@@ -115,10 +141,10 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin || !url.href.startsWith(APP_SCOPE_URL.href)) return;
 
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request).then(res => res || caches.match('/index.html')))
+    fetch(event.request).catch(() => caches.match(event.request).then(res => res || caches.match(resolveAppUrl('index.html'))))
   );
 });
 
@@ -145,12 +171,12 @@ self.addEventListener('push', event => {
 
   const options = {
     body: bodyParts.join('\n') || 'Bấm để mở quản lý hàng lỗi',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: resolveAppUrl('icons/icon-192.png'),
+    badge: resolveAppUrl('icons/icon-192.png'),
     tag: data.defect_id ? `defect-${data.defect_id}` : 'defect-notification',
     renotify: true,
     data: {
-      url: data.url || '/hang-loi/',
+      url: data.url || 'hang-loi/',
       defect_id: data.defect_id || null,
       notification_id: data.notification_id || null
     }
@@ -169,17 +195,27 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const urlToOpen = new URL(event.notification.data?.url || '/hang-loi/', self.location.origin).href;
+
+  // Fix đường dẫn khi bấm thông báo trên điện thoại:
+  // /hang-loi/ sẽ được đổi thành <scope-của-app>/hang-loi/
+  const urlToOpen = resolveAppUrl(event.notification.data?.url || 'hang-loi/');
 
   event.waitUntil((async () => {
     const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+
     for (const client of windowClients) {
-      if ('focus' in client && client.url.startsWith(self.location.origin)) {
+      const isSameApp = client.url && client.url.startsWith(APP_SCOPE_URL.href);
+      if (!isSameApp) continue;
+
+      try {
         await client.focus();
         if ('navigate' in client) return client.navigate(urlToOpen);
         return;
+      } catch (error) {
+        console.warn('Không chuyển được tab app cũ, sẽ mở tab mới:', error?.message || error);
       }
     }
+
     if (clients.openWindow) return clients.openWindow(urlToOpen);
   })());
 });
