@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trangchu-noibo-v6-fix-notification-click';
+const CACHE_NAME = 'trangchu-noibo-v7-notification-badge-icon';
 
 // Lấy đúng thư mục gốc của PWA theo scope.
 // Ví dụ:
