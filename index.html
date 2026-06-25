@@ -80,6 +80,7 @@
             </div>
             <nav id="top-tab-nav" class="hidden">
 				<button onclick="switchTab('dashboard')" id="tab-dashboard" class="py-5 px-1 tab-active transition-all">Dashboard</button>
+				<button onclick="switchTab('defects')" id="tab-defects" class="py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">Hàng lỗi</button>
 				<button onclick="switchTab('history')" id="tab-history" class="py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">Lịch sử</button>
 				<button onclick="switchTab('catalog')" id="tab-catalog" class="admin-po-only py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">
 					Danh mục hàng hóa
@@ -160,6 +161,11 @@
                 <span>Dashboard</span>
             </button>
 
+            <button onclick="switchTab('defects'); toggleSideMenu(false);" id="side-tab-defects" class="side-menu-item">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span>Hàng lỗi</span>
+            </button>
+
             <button onclick="switchTab('history'); toggleSideMenu(false);" id="side-tab-history" class="side-menu-item">
                 <i class="fas fa-clock-rotate-left"></i>
                 <span>Lịch sử</span>
@@ -191,6 +197,12 @@
 			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-blue-600 bg-blue-50 font-semibold text-[11px]">
 			<i class="fas fa-chart-pie text-lg"></i>
 			<span>Tổng quan</span>
+		</button>
+
+		<button onclick="switchTab('defects')" id="m-tab-defects"
+			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-triangle-exclamation text-lg"></i>
+			<span>Hàng lỗi</span>
 		</button>
 
 		<button onclick="switchTab('history')" id="m-tab-history"
@@ -399,6 +411,10 @@
             </div><!-- /dashboard-analytics-content -->
         </section>
 
+    </main>
+
+    <!-- Defects View -->
+    <main id="view-defects" class="w-[94%] max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 hidden">
         <div class="dashboard-list-title" id="dashboard-detail-section">
             <div>
                 <span class="dashboard-panel-kicker">Chi tiết báo cáo</span>

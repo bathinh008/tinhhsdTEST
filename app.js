@@ -1242,7 +1242,7 @@ let defectsData = [];
         function getAllowedTabs() {
             const role = currentRole || 'staff';
             const isMobile = window.innerWidth <= 768;
-            const tabs = ['dashboard', 'history'];
+            const tabs = ['dashboard', 'defects', 'history'];
 
             if (role === 'admin' || role === 'po') tabs.push('catalog');
             if (role === 'admin' || isMobile) tabs.push('users');
@@ -2948,11 +2948,12 @@ let defectsData = [];
 				tab = 'dashboard';
 			}
 
-            document.body.classList.remove('active-tab-dashboard', 'active-tab-history', 'active-tab-catalog', 'active-tab-users', 'active-tab-logs');
+            document.body.classList.remove('active-tab-dashboard', 'active-tab-defects', 'active-tab-history', 'active-tab-catalog', 'active-tab-users', 'active-tab-logs');
             document.body.classList.add('active-tab-' + tab);
 
 			// views
 			toggleHidden('view-dashboard', tab !== 'dashboard');
+			toggleHidden('view-defects', tab !== 'defects');
 			toggleHidden('view-history', tab !== 'history');
 			toggleHidden('view-catalog', tab !== 'catalog');
 			toggleHidden('view-users', tab !== 'users');
@@ -2964,6 +2965,7 @@ let defectsData = [];
 
 			// tabs active
 			toggleClass('tab-dashboard', 'tab-active', tab === 'dashboard');
+			toggleClass('tab-defects', 'tab-active', tab === 'defects');
 			toggleClass('tab-history', 'tab-active', tab === 'history');
 			toggleClass('tab-catalog', 'tab-active', tab === 'catalog');
 			toggleClass('tab-users', 'tab-active', tab === 'users');
@@ -2971,6 +2973,7 @@ let defectsData = [];
 
 			// text colors
 			toggleClass('tab-dashboard', 'text-slate-500', tab !== 'dashboard');
+			toggleClass('tab-defects', 'text-slate-500', tab !== 'defects');
 			toggleClass('tab-history', 'text-slate-500', tab !== 'history');
 			toggleClass('tab-catalog', 'text-slate-500', tab !== 'catalog');
 			toggleClass('tab-users', 'text-slate-500', tab !== 'users');
@@ -2984,7 +2987,7 @@ let defectsData = [];
 				fetchActivityLogs();
 			}
 			
-			['dashboard', 'history', 'catalog', 'users', 'logs'].forEach(name => {
+			['dashboard', 'defects', 'history', 'catalog', 'users', 'logs'].forEach(name => {
 				const el = document.getElementById(`m-tab-${name}`);
 				if (!el) return;
 
@@ -2995,7 +2998,7 @@ let defectsData = [];
 				el.classList.toggle('text-slate-500', !active);
 			});
 
-            ['dashboard', 'history', 'catalog', 'users', 'logs'].forEach(name => {
+            ['dashboard', 'defects', 'history', 'catalog', 'users', 'logs'].forEach(name => {
                 const el = document.getElementById(`side-tab-${name}`);
                 if (!el) return;
                 el.classList.toggle('active', tab === name);
@@ -4296,7 +4299,7 @@ let defectsData = [];
             if (window.__mobileSwipeTabsAndPullGuardReady) return;
             window.__mobileSwipeTabsAndPullGuardReady = true;
 
-            const allMobileTabs = ['dashboard', 'history', 'catalog', 'users', 'logs'];
+            const allMobileTabs = ['dashboard', 'defects', 'history', 'catalog', 'users', 'logs'];
             let startX = 0;
             let startY = 0;
             let startTime = 0;
@@ -4626,8 +4629,17 @@ function handleDashboardCardKey(event, status) {
     applyDashboardStatusFilter(status);
 }
 
+function openDefectsTabAndScroll() {
+    if (typeof window.switchTab === 'function') {
+        window.switchTab('defects', { silent: true });
+    }
+    window.setTimeout(() => {
+        document.getElementById('dashboard-detail-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 40);
+}
+
 function scrollDashboardToDetails() {
-    document.getElementById('dashboard-detail-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    openDefectsTabAndScroll();
 }
 
 function applyDashboardStatusFilter(status) {
@@ -4635,7 +4647,7 @@ function applyDashboardStatusFilter(status) {
     if (select) select.value = status;
     rememberDashboardFilters();
     renderDashboard();
-    scrollDashboardToDetails();
+    openDefectsTabAndScroll();
 }
 
 function applyDashboardAgingFilter(value) {
@@ -4645,14 +4657,14 @@ function applyDashboardAgingFilter(value) {
     if (aging) aging.value = value;
     rememberDashboardFilters();
     renderDashboard();
-    scrollDashboardToDetails();
+    openDefectsTabAndScroll();
 }
 
 function filterDashboardByVendor(vendorName) {
     const search = document.getElementById('search-input');
     if (search) search.value = String(vendorName || '');
     renderDashboard();
-    scrollDashboardToDetails();
+    openDefectsTabAndScroll();
 }
 
 function getDashboardPeriodConfig() {

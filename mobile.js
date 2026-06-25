@@ -17,7 +17,7 @@
 
     window.getAllowedTabs = function getAllowedTabs() {
         const role = safeCall(() => currentRole, 'staff') || 'staff';
-        const tabs = ['dashboard', 'history'];
+        const tabs = ['dashboard', 'defects', 'history'];
         if (role === 'admin' || role === 'po') tabs.push('catalog');
         if (role === 'admin' || isMobileViewport()) tabs.push('users');
         if (role === 'admin') tabs.push('logs');
@@ -39,7 +39,7 @@
     function updateMobileTabLayout() {
         const nav = document.getElementById('mobile-bottom-nav');
         const allowed = window.getAllowedTabs();
-        const allTabs = ['dashboard', 'history', 'catalog', 'users', 'logs'];
+        const allTabs = ['dashboard', 'defects', 'history', 'catalog', 'users', 'logs'];
 
         if (nav) {
             nav.style.setProperty('--mobile-tab-count', String(allowed.length));
@@ -54,7 +54,7 @@
 
             if (mobileBtn) mobileBtn.classList.toggle('mobile-tab-hidden', !visible);
             if (sideBtn) sideBtn.classList.toggle('hidden', !visible);
-            if (topBtn) topBtn.classList.toggle('hidden', !visible && tab !== 'dashboard' && tab !== 'history');
+            if (topBtn) topBtn.classList.toggle('hidden', !visible && tab !== 'dashboard' && tab !== 'defects' && tab !== 'history');
         });
     }
 
@@ -243,7 +243,7 @@
         const tab = getActiveTab();
         if (typeof syncOfflineDefects === 'function') await syncOfflineDefects(false);
 
-        if (tab === 'dashboard' || tab === 'history') {
+        if (tab === 'dashboard' || tab === 'defects' || tab === 'history') {
             if (typeof fetchDefects === 'function') await fetchDefects();
         } else if (tab === 'catalog') {
             if (typeof fetchCatalog === 'function') await fetchCatalog();

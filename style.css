@@ -787,7 +787,7 @@
                 display: none !important;
             }
 
-            body.active-tab-dashboard:not(.modal-open) #mobile-new-defect-btn {
+            body.active-tab-defects:not(.modal-open) #mobile-new-defect-btn {
                 display: inline-flex !important;
             }
         }
@@ -797,11 +797,11 @@
 
         /* Mobile: ở các tab không có nút + Báo lỗi, hạ nút lên đầu trang xuống thấp hơn */
         @media (max-width: 768px) {
-            body:not(.active-tab-dashboard) #scroll-top-btn {
+            body:not(.active-tab-defects) #scroll-top-btn {
                 bottom: calc(102px + env(safe-area-inset-bottom)) !important;
             }
 
-            body.active-tab-dashboard #scroll-top-btn {
+            body.active-tab-defects #scroll-top-btn {
                 bottom: calc(168px + env(safe-area-inset-bottom)) !important;
             }
         }
@@ -998,7 +998,7 @@
         box-shadow: 0 14px 30px rgba(37, 99, 235, 0.35);
     }
 
-    body.active-tab-dashboard:not(.modal-open):not(.image-modal-open) #mobile-new-defect-btn {
+    body.active-tab-defects:not(.modal-open):not(.image-modal-open) #mobile-new-defect-btn {
         display: inline-flex !important;
     }
 
@@ -1008,7 +1008,7 @@
         z-index: 87;
     }
 
-    body.active-tab-dashboard #scroll-top-btn {
+    body.active-tab-defects #scroll-top-btn {
         bottom: var(--mobile-scroll-top-dashboard-bottom) !important;
     }
 
@@ -2497,7 +2497,8 @@
 }
 
 @media (max-width: 768px) {
-    #view-dashboard {
+    #view-dashboard,
+    #view-defects {
         width: 100%;
         padding-left: 14px;
         padding-right: 14px;
@@ -2794,3 +2795,22 @@ button.dashboard-vendor-row:hover { background: #f8fafc; }
 .dashboard-hero-actions { width: min(100%, 560px); }
 .dashboard-hero-actions .dashboard-period-control { width: 100%; }
 @media (max-width: 768px) { .dashboard-hero-actions { width: 100%; } }
+
+/* V3: tối ưu thanh tab dưới khi tài khoản admin có đủ 6 tab */
+@media (max-width: 768px) {
+    #mobile-bottom-nav[data-tab-count="6"] {
+        gap: 0;
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    #mobile-bottom-nav[data-tab-count="6"] button {
+        min-width: 0;
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+
+    #mobile-bottom-nav[data-tab-count="6"] button span {
+        font-size: 9px;
+    }
+}

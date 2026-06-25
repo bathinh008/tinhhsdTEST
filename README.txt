@@ -38,3 +38,8 @@ Nâng cấp chính:
 - KPI đều dùng số lượng sản phẩm làm số chính; số báo cáo nằm ở dòng phụ.
 - Lưu người phụ trách, hạn xử lý, thời điểm bắt đầu/hoàn thành và ghi chú kết quả.
 - Lọc nhanh bằng KPI, top NCC, mức độ và thời hạn; hỗ trợ ngày tùy chọn và thu gọn dashboard.
+
+--- CẬP NHẬT V3: TÁCH TAB ---
+- Dashboard: chỉ xem tổng quan, KPI, biểu đồ và ưu tiên xử lý.
+- Hàng lỗi: tìm kiếm, lọc, thêm mới, cập nhật, nhập và xuất Excel.
+- Bấm dữ liệu trên Dashboard sẽ tự mở tab Hàng lỗi với bộ lọc tương ứng.
