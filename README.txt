@@ -1,55 +1,40 @@
-HƯỚNG DẪN SỬ DỤNG BẢN NÂNG CẤP MOBILE
+BẢN DASHBOARD QUẢN LÝ HÀNG LỖI
+===============================
 
-1) Upload toàn bộ 5 file này lên cùng một thư mục:
-   - index.html
-   - style.css
-   - supabase.js
-   - app.js
-   - mobile.js
+Các phần đã bổ sung:
+- Giao diện dashboard tổng quan hiện đại, responsive cho PC và điện thoại.
+- Bộ lọc thống kê: 7 ngày, 30 ngày, 90 ngày và toàn bộ dữ liệu.
+- 4 thẻ KPI: tổng số lượng lỗi, chờ xử lý, đang sửa, đã hoàn thành.
+- So sánh số lượng lỗi với kỳ trước.
+- Biểu đồ xu hướng số báo cáo phát sinh.
+- Biểu đồ tròn tỷ lệ trạng thái xử lý.
+- Top 5 nhà cung cấp có nhiều báo cáo lỗi.
+- Danh sách hàng lỗi cần ưu tiên; bấm vào để mở cập nhật trạng thái.
+- Hiển thị số mục đang có trong bảng sau khi tìm kiếm/lọc.
+- Giữ nguyên các chức năng cũ: báo lỗi, hình ảnh, Excel, lịch sử, tài khoản, thông báo và nhật ký.
 
-2) Mở index.html như bản cũ. Không đổi tên file nếu chưa sửa lại đường dẫn trong index.html.
+File chính:
+- index.html
+- style.css
+- app.js
+- mobile.js
+- supabase.js
 
-3) Các nâng cấp chính:
-   - Dọn CSS mobile về block cuối style.css để giảm lỗi override.
-   - Header mobile tự ẩn khi kéo xuống, hiện khi kéo lên.
-   - Bấm logo hoặc tiêu đề để về tab Báo lỗi.
-   - Chuông thông báo rung nhẹ khi có thông báo mới.
-   - Bottom tab tự co theo quyền tài khoản.
-   - Empty state đẹp cho các tab khi chưa có dữ liệu.
-   - Pull-to-refresh nội bộ trên mobile.
-   - Nút xóa nhanh ô tìm kiếm trên cả mobile và PC.
-   - Ảnh báo lỗi được nén, preview dạng lưới, có thể xóa trước khi gửi.
-   - Offline nhẹ: nếu mất mạng khi lưu báo lỗi, dữ liệu được lưu tạm ở localStorage và tự đồng bộ khi có mạng.
-
-4) Lưu ý ảnh nhiều ảnh:
-   - UI hỗ trợ chọn tối đa 5 ảnh.
-   - Nếu bảng defects có cột image_urls, hệ thống sẽ lưu danh sách ảnh.
-   - Nếu chưa có cột image_urls, hệ thống tự tương thích bản cũ và lưu ảnh đầu tiên vào image_url.
-
-SQL tùy chọn nếu muốn lưu nhiều ảnh thật sự:
-ALTER TABLE defects ADD COLUMN IF NOT EXISTS image_urls jsonb DEFAULT '[]'::jsonb;
+Lưu ý triển khai:
+- Thay toàn bộ các file cùng tên trên hosting bằng file trong gói này.
+- Giữ nguyên cấu hình Supabase hiện tại trong supabase.js.
+- Nếu GitHub Pages hoặc trình duyệt còn cache bản cũ, hãy hard refresh hoặc tăng CACHE_NAME trong service-worker.js của thư mục cha.
 
 
-Cập nhật thêm:
-- Xóa preview ảnh cũ dạng ảnh lớn trong modal Báo cáo lỗi.
-- Chỉ dùng lưới preview ảnh mới, có nút X xóa từng ảnh.
+DASHBOARD V2 - NÂNG CẤP
+=======================
+1. Chạy SUPABASE_UPGRADE_V2.sql trong Supabase SQL Editor trước khi dùng phần thời gian xử lý.
+2. Tải toàn bộ các file lên hosting, ghi đè bản cũ.
+3. Nhấn Ctrl + F5 hoặc tăng CACHE_NAME của service-worker nếu giao diện vẫn còn bản cũ.
 
-Cập nhật gallery ảnh báo lỗi:
-- Danh sách Báo lỗi chỉ hiển thị 1 ảnh đại diện kèm số lượng ảnh.
-- Bấm ảnh để mở review ảnh lớn.
-- Trong review có nút chuyển ảnh trước/sau, ảnh chạy vòng từ ảnh 1 đến ảnh cuối.
-- Toàn bộ ảnh nhỏ hiển thị bên dưới, bấm ảnh nhỏ để đổi ảnh lớn.
-- Layout tối ưu lại cho PC và mobile.
-
-
-BẢN FIX KIỂM TRA 25/06/2026:
-- Làm sạch thẻ tải Tailwind ở đầu index.html.
-- Nút đăng nhập chỉ gửi form một lần; bỏ onclick và bộ bắt phím Enter bị trùng.
-- Chặn bấm đăng nhập liên tục khi yêu cầu trước đang xử lý.
-- Hiển thị lỗi rõ hơn khi Supabase/RPC/mạng gặp sự cố.
-- Tải lại báo lỗi và danh mục sau khi đăng nhập hoặc khôi phục phiên.
-
-LƯU Ý BẢO MẬT CẦN XỬ LÝ Ở SUPABASE:
-- Giao diện không thay thế RLS. Phải khóa INSERT/UPDATE/DELETE theo đúng role ở database.
-- Phiên app_user hiện được khôi phục từ localStorage; nên có RPC kiểm tra lại tài khoản active/role phía server.
-- Tài khoản Supabase Auth hiện mặc định admin nếu profiles không có role; nên đổi sang mặc định staff hoặc chặn bằng policy.
+Nâng cấp chính:
+- Escape dữ liệu động ở dashboard, lịch sử, danh mục, tài khoản và nhật ký.
+- Danh sách ưu tiên lấy toàn bộ hàng chưa hoàn thành, ưu tiên quá hạn và nghiêm trọng.
+- KPI đều dùng số lượng sản phẩm làm số chính; số báo cáo nằm ở dòng phụ.
+- Lưu người phụ trách, hạn xử lý, thời điểm bắt đầu/hoàn thành và ghi chú kết quả.
+- Lọc nhanh bằng KPI, top NCC, mức độ và thời hạn; hỗ trợ ngày tùy chọn và thu gọn dashboard.

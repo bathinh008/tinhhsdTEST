@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý hàng lỗi</title>
+    <title>Dashboard | Quản lý hàng lỗi</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 	<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
@@ -79,7 +79,7 @@
                 </div>
             </div>
             <nav id="top-tab-nav" class="hidden">
-				<button onclick="switchTab('dashboard')" id="tab-dashboard" class="py-5 px-1 tab-active transition-all">Báo cáo lỗi</button>
+				<button onclick="switchTab('dashboard')" id="tab-dashboard" class="py-5 px-1 tab-active transition-all">Dashboard</button>
 				<button onclick="switchTab('history')" id="tab-history" class="py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">Lịch sử</button>
 				<button onclick="switchTab('catalog')" id="tab-catalog" class="admin-po-only py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">
 					Danh mục hàng hóa
@@ -156,8 +156,8 @@
 
         <div class="p-3 space-y-1">
             <button onclick="switchTab('dashboard'); toggleSideMenu(false);" id="side-tab-dashboard" class="side-menu-item active">
-                <i class="fas fa-clipboard-list"></i>
-                <span>Báo cáo lỗi</span>
+                <i class="fas fa-chart-pie"></i>
+                <span>Dashboard</span>
             </button>
 
             <button onclick="switchTab('history'); toggleSideMenu(false);" id="side-tab-history" class="side-menu-item">
@@ -189,8 +189,8 @@
 
 		<button onclick="switchTab('dashboard')" id="m-tab-dashboard"
 			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-blue-600 bg-blue-50 font-semibold text-[11px]">
-			<i class="fas fa-clipboard-list text-lg"></i>
-			<span>Báo lỗi</span>
+			<i class="fas fa-chart-pie text-lg"></i>
+			<span>Tổng quan</span>
 		</button>
 
 		<button onclick="switchTab('history')" id="m-tab-history"
@@ -221,36 +221,191 @@
 
     <!-- Dashboard View -->
     <main id="view-dashboard" class="w-[94%] max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Stats Dashboard -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
-            <div class="bg-white border border-slate-200 p-4 md:p-5 rounded-2xl shadow-sm">
-                <div class="flex justify-between items-start mb-2">
-                    <span class="text-sm font-medium text-slate-500">Tổng số lỗi</span>
-                    <div class="p-2 rounded-lg text-blue-600 bg-blue-50"><i class="fas fa-chart-bar"></i></div>
+        <!-- Dashboard Analytics -->
+        <section class="dashboard-shell mb-7">
+            <div class="dashboard-hero-card">
+                <div class="dashboard-hero-copy">
+                    <div class="dashboard-eyebrow"><i class="fas fa-chart-line"></i> Tổng quan hoạt động</div>
+                    <h2>Dashboard hàng lỗi</h2>
+                    <p id="dashboard-period-caption">Theo dõi tình trạng hàng lỗi trong 30 ngày gần nhất.</p>
                 </div>
-                <div id="stat-total" class="text-2xl font-bold">0</div>
-            </div>
-            <div class="bg-white border border-slate-200 p-4 md:p-5 rounded-2xl shadow-sm">
-                <div class="flex justify-between items-start mb-2">
-                    <span class="text-sm font-medium text-slate-500">Chờ xử lý</span>
-                    <div class="p-2 rounded-lg text-yellow-600 bg-yellow-50"><i class="fas fa-clock"></i></div>
+                <div class="dashboard-hero-actions">
+                    <div class="dashboard-period-control">
+                        <label for="dashboard-period">Thời gian thống kê</label>
+                        <div class="dashboard-period-select">
+                            <i class="fas fa-calendar-days"></i>
+                            <select id="dashboard-period" onchange="handleDashboardPeriodChange()">
+                                <option value="7">7 ngày gần nhất</option>
+                                <option value="30" selected>30 ngày gần nhất</option>
+                                <option value="90">90 ngày gần nhất</option>
+                                <option value="custom">Tùy chọn ngày</option>
+                                <option value="all">Toàn bộ dữ liệu</option>
+                            </select>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="dashboard-custom-range" class="dashboard-custom-range hidden">
+                            <label>
+                                <span>Từ ngày</span>
+                                <input id="dashboard-date-from" type="date">
+                            </label>
+                            <label>
+                                <span>Đến ngày</span>
+                                <input id="dashboard-date-to" type="date">
+                            </label>
+                            <button type="button" onclick="applyDashboardCustomRange()">
+                                <i class="fas fa-filter"></i> Áp dụng
+                            </button>
+                        </div>
+                    </div>
+                    <button id="dashboard-collapse-btn" type="button" class="dashboard-collapse-btn" onclick="toggleDashboardAnalytics()" aria-expanded="true">
+                        <i class="fas fa-chevron-up"></i>
+                        <span>Thu gọn</span>
+                    </button>
                 </div>
-                <div id="stat-pending" class="text-2xl font-bold">0</div>
             </div>
-            <div class="bg-white border border-slate-200 p-4 md:p-5 rounded-2xl shadow-sm">
-                <div class="flex justify-between items-start mb-2">
-                    <span class="text-sm font-medium text-slate-500">Đang sửa</span>
-                    <div class="p-2 rounded-lg text-orange-600 bg-orange-50"><i class="fas fa-exclamation-circle"></i></div>
-                </div>
-                <div id="stat-fixing" class="text-2xl font-bold">0</div>
+
+            <div id="dashboard-analytics-content" class="dashboard-analytics-content">
+            <div class="dashboard-kpi-grid">
+                <article class="dashboard-kpi-card dashboard-kpi-blue" data-status-card="All" role="button" tabindex="0" onclick="applyDashboardStatusFilter('All')" onkeydown="handleDashboardCardKey(event, 'All')">
+                    <div class="dashboard-kpi-top">
+                        <div>
+                            <span class="dashboard-kpi-label">Tổng số lượng lỗi</span>
+                            <strong id="stat-total">0</strong>
+                        </div>
+                        <span class="dashboard-kpi-icon"><i class="fas fa-boxes-stacked"></i></span>
+                    </div>
+                    <div class="dashboard-kpi-foot">
+                        <span id="dashboard-total-reports">0 báo cáo</span>
+                        <span id="dashboard-total-trend" class="dashboard-trend neutral">Chưa có dữ liệu kỳ trước</span>
+                    </div>
+                </article>
+
+                <article class="dashboard-kpi-card dashboard-kpi-amber" data-status-card="Pending" role="button" tabindex="0" onclick="applyDashboardStatusFilter('Pending')" onkeydown="handleDashboardCardKey(event, 'Pending')">
+                    <div class="dashboard-kpi-top">
+                        <div>
+                            <span class="dashboard-kpi-label">Số lượng chờ xử lý</span>
+                            <strong id="stat-pending">0</strong>
+                        </div>
+                        <span class="dashboard-kpi-icon"><i class="fas fa-hourglass-half"></i></span>
+                    </div>
+                    <div class="dashboard-kpi-foot">
+                        <span id="dashboard-pending-share">0 báo cáo · 0%</span>
+                        <span class="dashboard-kpi-note"><i class="fas fa-circle"></i> Cần theo dõi</span>
+                    </div>
+                </article>
+
+                <article class="dashboard-kpi-card dashboard-kpi-orange" data-status-card="Fixing" role="button" tabindex="0" onclick="applyDashboardStatusFilter('Fixing')" onkeydown="handleDashboardCardKey(event, 'Fixing')">
+                    <div class="dashboard-kpi-top">
+                        <div>
+                            <span class="dashboard-kpi-label">Số lượng đang sửa</span>
+                            <strong id="stat-fixing">0</strong>
+                        </div>
+                        <span class="dashboard-kpi-icon"><i class="fas fa-screwdriver-wrench"></i></span>
+                    </div>
+                    <div class="dashboard-kpi-foot">
+                        <span id="dashboard-fixing-share">0 báo cáo · 0%</span>
+                        <span id="dashboard-oldest-open" class="dashboard-kpi-note">Không có tồn đọng</span>
+                    </div>
+                </article>
+
+                <article class="dashboard-kpi-card dashboard-kpi-green" data-status-card="Resolved" role="button" tabindex="0" onclick="applyDashboardStatusFilter('Resolved')" onkeydown="handleDashboardCardKey(event, 'Resolved')">
+                    <div class="dashboard-kpi-top">
+                        <div>
+                            <span class="dashboard-kpi-label">Số lượng đã hoàn thành</span>
+                            <strong id="stat-resolved">0</strong>
+                        </div>
+                        <span class="dashboard-kpi-icon"><i class="fas fa-circle-check"></i></span>
+                    </div>
+                    <div class="dashboard-kpi-foot">
+                        <span id="dashboard-completion-rate">0 báo cáo · 0%</span>
+                        <span id="dashboard-today-count" class="dashboard-kpi-note">Hôm nay: 0 hoàn thành</span>
+                    </div>
+                </article>
             </div>
-            <div class="bg-white border border-slate-200 p-4 md:p-5 rounded-2xl shadow-sm">
-                <div class="flex justify-between items-start mb-2">
-                    <span class="text-sm font-medium text-slate-500">Đã xong</span>
-                    <div class="p-2 rounded-lg text-green-600 bg-green-50"><i class="fas fa-check-circle"></i></div>
-                </div>
-                <div id="stat-resolved" class="text-2xl font-bold">0</div>
+
+            <div class="dashboard-operations-grid">
+                <article class="dashboard-operation-card">
+                    <span class="dashboard-operation-icon bg-blue"><i class="fas fa-stopwatch"></i></span>
+                    <div><span>Thời gian hoàn tất TB</span><strong id="dashboard-avg-resolution">Chưa có dữ liệu</strong></div>
+                </article>
+                <article class="dashboard-operation-card" role="button" tabindex="0" onclick="applyDashboardAgingFilter('overdue')">
+                    <span class="dashboard-operation-icon bg-red"><i class="fas fa-calendar-xmark"></i></span>
+                    <div><span>Quá hạn toàn hệ thống</span><strong id="dashboard-overdue-count">0 mục</strong></div>
+                </article>
+                <article class="dashboard-operation-card">
+                    <span class="dashboard-operation-icon bg-green"><i class="fas fa-check-double"></i></span>
+                    <div><span>Hoàn thành hôm nay</span><strong id="dashboard-resolved-today">0 báo cáo</strong></div>
+                </article>
+                <article class="dashboard-operation-card" role="button" tabindex="0" onclick="applyDashboardAgingFilter('older7')">
+                    <span class="dashboard-operation-icon bg-amber"><i class="fas fa-clock-rotate-left"></i></span>
+                    <div><span>Tồn đọng trên 7 ngày</span><strong id="dashboard-open-over7">0 mục</strong></div>
+                </article>
             </div>
+
+            <div class="dashboard-insights-grid">
+                <article class="dashboard-panel dashboard-trend-panel">
+                    <div class="dashboard-panel-head">
+                        <div>
+                            <span class="dashboard-panel-kicker">Xu hướng</span>
+                            <h3>Số báo cáo phát sinh</h3>
+                        </div>
+                        <span id="dashboard-trend-total" class="dashboard-panel-badge">0 báo cáo</span>
+                    </div>
+                    <div id="dashboard-trend-bars" class="dashboard-bars" aria-label="Biểu đồ xu hướng báo cáo lỗi"></div>
+                </article>
+
+                <article class="dashboard-panel dashboard-status-panel">
+                    <div class="dashboard-panel-head">
+                        <div>
+                            <span class="dashboard-panel-kicker">Trạng thái</span>
+                            <h3>Tỷ lệ xử lý theo báo cáo</h3>
+                        </div>
+                    </div>
+                    <div class="dashboard-status-content">
+                        <div id="dashboard-status-donut" class="dashboard-donut">
+                            <div class="dashboard-donut-center">
+                                <strong id="dashboard-donut-rate">0%</strong>
+                                <span>Hoàn thành</span>
+                            </div>
+                        </div>
+                        <div id="dashboard-status-legend" class="dashboard-status-legend"></div>
+                    </div>
+                </article>
+            </div>
+
+            <div class="dashboard-lower-grid">
+                <article class="dashboard-panel">
+                    <div class="dashboard-panel-head">
+                        <div>
+                            <span class="dashboard-panel-kicker">Nhà cung cấp</span>
+                            <h3>NCC có nhiều báo cáo lỗi</h3>
+                        </div>
+                        <span class="dashboard-panel-badge"><i class="fas fa-ranking-star"></i> Top 5</span>
+                    </div>
+                    <div id="dashboard-top-vendors" class="dashboard-vendor-list"></div>
+                </article>
+
+                <article class="dashboard-panel">
+                    <div class="dashboard-panel-head">
+                        <div>
+                            <span class="dashboard-panel-kicker">Ưu tiên xử lý</span>
+                            <h3>Hàng lỗi cần chú ý</h3>
+                        </div>
+                        <span id="dashboard-priority-count" class="dashboard-panel-badge">0 mục</span>
+                    </div>
+                    <div id="dashboard-priority-list" class="dashboard-priority-list"></div>
+                </article>
+            </div>
+            </div><!-- /dashboard-analytics-content -->
+        </section>
+
+        <div class="dashboard-list-title" id="dashboard-detail-section">
+            <div>
+                <span class="dashboard-panel-kicker">Chi tiết báo cáo</span>
+                <h2>Danh sách hàng lỗi đang xử lý</h2>
+                <p>Tìm kiếm, lọc, cập nhật trạng thái hoặc xuất dữ liệu Excel.</p>
+            </div>
+            <span id="dashboard-visible-count" class="dashboard-list-count">0 mục</span>
         </div>
 
         <!-- Controls -->
@@ -305,13 +460,31 @@
 
                 <select 
                     id="filter-status"
-                    class="w-full md:w-56 bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                    onchange="renderDashboard()"
+                    class="w-full md:w-52 bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                    onchange="rememberDashboardFilters(); renderDashboard()"
                 >
-                    <option value="All">Tất cả trạng thái</option>
+                    <option value="All">Đang xử lý: tất cả</option>
                     <option value="Pending">Chờ xử lý</option>
                     <option value="Fixing">Đang sửa</option>
                     <option value="Resolved">Đã hoàn thành</option>
+                </select>
+
+                <select id="filter-severity"
+                    class="w-full md:w-48 bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                    onchange="rememberDashboardFilters(); renderDashboard()">
+                    <option value="All">Tất cả mức độ</option>
+                    <option value="High">Nghiêm trọng</option>
+                    <option value="Medium">Trung bình</option>
+                    <option value="Low">Thấp</option>
+                </select>
+
+                <select id="filter-aging"
+                    class="w-full md:w-52 bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                    onchange="rememberDashboardFilters(); renderDashboard()">
+                    <option value="All">Tất cả thời hạn</option>
+                    <option value="overdue">Đã quá hạn</option>
+                    <option value="dueSoon">Sắp đến hạn 48 giờ</option>
+                    <option value="older7">Tồn trên 7 ngày</option>
                 </select>
             </div>
         </div>
@@ -822,83 +995,76 @@
 	</div>
 	
 	<div id="modal-status" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4">
-		<div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5 animate-in max-h-[90vh] overflow-y-auto">
-    
-			<div class="flex items-start justify-between mb-3">
-				<div>
-					<h2 class="text-xl font-bold text-slate-800 leading-tight">
-						Cập nhật kết quả xử lý
-					</h2>
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl p-5 animate-in max-h-[92vh] overflow-y-auto">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800 leading-tight">Cập nhật xử lý hàng lỗi</h2>
+                    <p class="text-sm text-slate-400 mt-1">Cập nhật trạng thái, người phụ trách và thời hạn xử lý</p>
+                </div>
+                <button onclick="toggleModal('modal-status', false)" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-500 transition-all">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
 
-					<p class="text-sm text-slate-400 mt-1">
-						Chạm để cập nhật trạng thái
-					</p>
-				</div>
+            <input type="hidden" id="status-defect-id">
 
-				<button onclick="toggleModal('modal-status', false)"
-					class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-500 transition-all">
-					<i class="fas fa-times"></i>
-				</button>
-			</div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-4">
+                <div class="font-bold text-lg text-slate-800 mb-3" id="status-product-name">Tên sản phẩm</div>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="bg-white rounded-xl p-2.5 border border-slate-100">
+                        <div class="text-slate-400 text-xs mb-1">Item</div>
+                        <div class="font-semibold text-slate-700 break-all" id="status-sku">-</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-2.5 border border-slate-100">
+                        <div class="text-slate-400 text-xs mb-1">Barcode</div>
+                        <div class="font-semibold text-slate-700 break-all" id="status-barcode">-</div>
+                    </div>
+                </div>
+                <div class="workflow-timeline-grid mt-3">
+                    <div><span>Tiếp nhận</span><strong id="status-created-at">-</strong></div>
+                    <div><span>Bắt đầu sửa</span><strong id="status-fixing-at">-</strong></div>
+                    <div><span>Hoàn thành</span><strong id="status-resolved-at">-</strong></div>
+                    <div><span>Thời gian hoàn tất</span><strong id="status-processing-time">-</strong></div>
+                </div>
+            </div>
 
-			<input type="hidden" id="status-defect-id">
+            <div id="workflow-schema-warning" class="workflow-schema-warning hidden">
+                <i class="fas fa-database"></i>
+                <span>Database chưa có các cột quản lý thời gian. Hãy chạy file <b>SUPABASE_UPGRADE_V2.sql</b>.</span>
+            </div>
 
-			<!-- INFO -->
-			<div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-4">
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Người phụ trách</label>
+                    <input id="status-assigned-to" list="status-assignee-options" placeholder="Nhập tên người phụ trách"
+                        class="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                    <datalist id="status-assignee-options"></datalist>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Hạn xử lý</label>
+                    <input id="status-due-at" type="datetime-local"
+                        class="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Ghi chú kết quả xử lý</label>
+                    <textarea id="status-resolution-note" rows="3" maxlength="1000" placeholder="Ví dụ: Đã đổi sản phẩm, trả NCC, sửa bao bì..."
+                        class="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-y"></textarea>
+                </div>
+            </div>
 
-				<div class="font-bold text-lg text-slate-800 mb-3"
-					 id="status-product-name">
-					Tên sản phẩm
-				</div>
-
-				<div class="grid grid-cols-2 gap-3 text-sm">
-
-					<div class="bg-white rounded-xl p-2.5 border border-slate-100">
-						<div class="text-slate-400 text-xs mb-1">Item</div>
-						<div class="font-semibold text-slate-700"
-							 id="status-sku">
-							-
-						</div>
-					</div>
-
-					<div class="bg-white rounded-xl p-3 border border-slate-100">
-						<div class="text-slate-400 text-xs mb-1">Barcode</div>
-						<div class="font-semibold text-slate-700"
-							 id="status-barcode">
-							-
-						</div>
-					</div>
-
-				</div>
-
-				<div class="mt-3 bg-white rounded-xl p-3 border border-slate-100">
-					<div class="text-slate-400 text-xs mb-1">
-						Ngày cập nhật
-					</div>
-
-					<div class="font-semibold text-slate-700"
-						 id="status-date">
-						-
-					</div>
-				</div>
-			</div>
-			
-			<!-- NÚT TRẠNG THÁI -->
-			<div class="space-y-3">
-				<button onclick="saveStatus('Pending')" class="w-full py-2.5 rounded-xl text-sm bg-yellow-100 text-yellow-800 font-bold">
-					Chờ xử lý
-				</button>
-
-				<button onclick="saveStatus('Fixing')" class="w-full py-3 rounded-xl bg-orange-100 text-orange-800 font-bold">
-					Đã sửa / Đang sửa
-				</button>
-
-				<button onclick="saveStatus('Resolved')" class="w-full py-3 rounded-xl bg-green-100 text-green-800 font-bold">
-					Xong
-				</button>
-			</div>
-		</div>
-	</div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button onclick="saveStatus('Pending')" class="w-full py-3 rounded-xl text-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-bold">
+                    <i class="fas fa-hourglass-half mr-1"></i> Chờ xử lý
+                </button>
+                <button onclick="saveStatus('Fixing')" class="w-full py-3 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-800 font-bold">
+                    <i class="fas fa-screwdriver-wrench mr-1"></i> Đang sửa
+                </button>
+                <button onclick="saveStatus('Resolved')" class="w-full py-3 rounded-xl bg-green-100 hover:bg-green-200 text-green-800 font-bold">
+                    <i class="fas fa-circle-check mr-1"></i> Hoàn thành
+                </button>
+            </div>
+        </div>
+    </div>
 
 	<div id="modal-user"
 		class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[80] hidden flex items-center justify-center p-4">

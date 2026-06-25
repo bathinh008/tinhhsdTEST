@@ -1595,8 +1595,13 @@ let defectsData = [];
             if (tableName === 'dashboard') {
                 const search = document.getElementById('search-input');
                 const status = document.getElementById('filter-status');
+                const severity = document.getElementById('filter-severity');
+                const aging = document.getElementById('filter-aging');
                 if (search) search.value = '';
                 if (status) status.value = 'All';
+                if (severity) severity.value = 'All';
+                if (aging) aging.value = 'All';
+                if (typeof rememberDashboardFilters === 'function') rememberDashboardFilters();
             }
 
             if (tableName === 'history') {
@@ -1810,7 +1815,307 @@ let defectsData = [];
             </button>`;
         }
 
+        function getDashboardPeriodConfig() {
+            const value = document.getElementById('dashboard-period')?.value || '30';
+            const configs = {
+                '7': { value: '7', days: 7, label: '7 ngày gần nhất', bucketCount: 7 },
+                '30': { value: '30', days: 30, label: '30 ngày gần nhất', bucketCount: 10 },
+                '90': { value: '90', days: 90, label: '90 ngày gần nhất', bucketCount: 9 },
+                'all': { value: 'all', days: null, label: 'toàn bộ dữ liệu', bucketCount: 12 }
+            };
+            return configs[value] || configs['30'];
+        }
+
+        function getValidDashboardDate(value) {
+            const date = value ? new Date(value) : null;
+            return date && !Number.isNaN(date.getTime()) ? date : null;
+        }
+
+        function getDashboardPeriodRows(config, periodOffset = 0) {
+            if (config.value === 'all' && periodOffset === 0) return [...defectsData];
+
+            const rangeDays = config.value === 'all' ? 30 : config.days;
+            const now = Date.now();
+            const end = now - (periodOffset * rangeDays * 86400000);
+            const start = end - (rangeDays * 86400000);
+
+            return defectsData.filter(item => {
+                const date = getValidDashboardDate(item.created_at);
+                if (!date) return false;
+                const time = date.getTime();
+                return time > start && time <= end;
+            });
+        }
+
+        function sumDashboardQuantity(rows) {
+            return rows.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+        }
+
+        function dashboardPercent(value, total) {
+            if (!total) return 0;
+            return Math.round((value / total) * 100);
+        }
+
+        function setDashboardText(id, value) {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        }
+
+        function getDashboardTrendBuckets(rows, config) {
+            const effectiveDays = config.value === 'all' ? 365 : config.days;
+            const count = config.bucketCount;
+            const now = new Date();
+            const endTime = now.getTime();
+            const startTime = endTime - effectiveDays * 86400000;
+            const bucketSize = (endTime - startTime) / count;
+            const buckets = Array.from({ length: count }, (_, index) => {
+                const start = startTime + index * bucketSize;
+                const end = index === count - 1 ? endTime + 1 : start + bucketSize;
+                const labelDate = new Date(start + bucketSize / 2);
+                let label = `${String(labelDate.getDate()).padStart(2, '0')}/${String(labelDate.getMonth() + 1).padStart(2, '0')}`;
+
+                if (effectiveDays <= 7) {
+                    label = labelDate.toLocaleDateString('vi-VN', { weekday: 'short' });
+                } else if (config.value === 'all') {
+                    label = `T${labelDate.getMonth() + 1}`;
+                }
+
+                return { start, end, label, count: 0, quantity: 0 };
+            });
+
+            rows.forEach(item => {
+                const date = getValidDashboardDate(item.created_at);
+                if (!date) return;
+                const time = date.getTime();
+                const bucket = buckets.find(entry => time >= entry.start && time < entry.end);
+                if (!bucket) return;
+                bucket.count += 1;
+                bucket.quantity += Number(item.quantity) || 0;
+            });
+
+            return buckets;
+        }
+
+        function formatDashboardAge(value) {
+            const date = getValidDashboardDate(value);
+            if (!date) return 'Không rõ thời gian';
+            const diff = Math.max(0, Date.now() - date.getTime());
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(hours / 24);
+            if (days > 0) return `${days} ngày`;
+            if (hours > 0) return `${hours} giờ`;
+            return 'Mới tạo';
+        }
+
+        function renderDashboardAnalytics() {
+            const periodSelect = document.getElementById('dashboard-period');
+            if (!periodSelect) return;
+
+            const config = getDashboardPeriodConfig();
+            const rows = getDashboardPeriodRows(config, 0);
+            const previousRows = config.value === 'all' ? [] : getDashboardPeriodRows(config, 1);
+            const totalReports = rows.length;
+            const totalQuantity = sumDashboardQuantity(rows);
+            const pendingRows = rows.filter(item => item.status === 'Pending');
+            const fixingRows = rows.filter(item => item.status === 'Fixing');
+            const resolvedRows = rows.filter(item => item.status === 'Resolved');
+            const unresolvedRows = rows.filter(item => item.status !== 'Resolved');
+            const completionRate = dashboardPercent(resolvedRows.length, totalReports);
+
+            setDashboardText('stat-total', totalQuantity.toLocaleString('vi-VN'));
+            setDashboardText('stat-pending', pendingRows.length.toLocaleString('vi-VN'));
+            setDashboardText('stat-fixing', fixingRows.length.toLocaleString('vi-VN'));
+            setDashboardText('stat-resolved', resolvedRows.length.toLocaleString('vi-VN'));
+            setDashboardText('dashboard-total-reports', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
+            setDashboardText('dashboard-pending-share', `${dashboardPercent(pendingRows.length, totalReports)}% tổng báo cáo`);
+            setDashboardText('dashboard-fixing-share', `${dashboardPercent(fixingRows.length, totalReports)}% tổng báo cáo`);
+            setDashboardText('dashboard-completion-rate', `${completionRate}% tỷ lệ hoàn thành`);
+            setDashboardText('dashboard-donut-rate', `${completionRate}%`);
+            setDashboardText('dashboard-trend-total', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
+
+            const caption = document.getElementById('dashboard-period-caption');
+            if (caption) {
+                caption.textContent = config.value === 'all'
+                    ? 'Theo dõi toàn bộ dữ liệu hàng lỗi. Biểu đồ xu hướng hiển thị 12 tháng gần nhất.'
+                    : `Theo dõi tình trạng hàng lỗi trong ${config.label}.`;
+            }
+
+            const today = new Date();
+            const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+            const todayCount = defectsData.filter(item => {
+                const date = getValidDashboardDate(item.created_at);
+                return date && `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` === todayKey;
+            }).length;
+            setDashboardText('dashboard-today-count', `Hôm nay: ${todayCount} mới`);
+
+            const oldestOpen = unresolvedRows
+                .map(item => getValidDashboardDate(item.created_at))
+                .filter(Boolean)
+                .sort((a, b) => a - b)[0];
+            setDashboardText(
+                'dashboard-oldest-open',
+                oldestOpen ? `Tồn lâu nhất: ${formatDashboardAge(oldestOpen)}` : 'Không có tồn đọng'
+            );
+
+            const trendElement = document.getElementById('dashboard-total-trend');
+            if (trendElement) {
+                if (config.value === 'all') {
+                    trendElement.className = 'dashboard-trend neutral';
+                    trendElement.innerHTML = '<i class="fas fa-database"></i> Toàn bộ dữ liệu';
+                } else {
+                    const previousQuantity = sumDashboardQuantity(previousRows);
+                    if (previousQuantity === 0 && totalQuantity === 0) {
+                        trendElement.className = 'dashboard-trend neutral';
+                        trendElement.innerHTML = '<i class="fas fa-minus"></i> Không đổi';
+                    } else if (previousQuantity === 0) {
+                        trendElement.className = 'dashboard-trend down';
+                        trendElement.innerHTML = '<i class="fas fa-arrow-up"></i> Phát sinh mới';
+                    } else {
+                        const difference = Math.round(((totalQuantity - previousQuantity) / previousQuantity) * 100);
+                        if (difference > 0) {
+                            trendElement.className = 'dashboard-trend down';
+                            trendElement.innerHTML = `<i class="fas fa-arrow-up"></i> +${Math.abs(difference)}% so kỳ trước`;
+                        } else if (difference < 0) {
+                            trendElement.className = 'dashboard-trend up';
+                            trendElement.innerHTML = `<i class="fas fa-arrow-down"></i> -${Math.abs(difference)}% so kỳ trước`;
+                        } else {
+                            trendElement.className = 'dashboard-trend neutral';
+                            trendElement.innerHTML = '<i class="fas fa-minus"></i> Không đổi';
+                        }
+                    }
+                }
+            }
+
+            const trendContainer = document.getElementById('dashboard-trend-bars');
+            if (trendContainer) {
+                const trendSource = config.value === 'all'
+                    ? defectsData.filter(item => {
+                        const date = getValidDashboardDate(item.created_at);
+                        return date && date.getTime() >= Date.now() - 365 * 86400000;
+                    })
+                    : rows;
+                const buckets = getDashboardTrendBuckets(trendSource, config);
+                const maxCount = Math.max(1, ...buckets.map(bucket => bucket.count));
+                trendContainer.innerHTML = buckets.map(bucket => {
+                    const height = bucket.count ? Math.max(9, Math.round((bucket.count / maxCount) * 100)) : 3;
+                    return `
+                        <div class="dashboard-bar-item" title="${bucket.count} báo cáo, số lượng ${bucket.quantity}">
+                            <div class="dashboard-bar-track">
+                                <div class="dashboard-bar" style="height:${height}%">
+                                    <span class="dashboard-bar-value">${bucket.count}</span>
+                                </div>
+                            </div>
+                            <span class="dashboard-bar-label">${escapeHtml(bucket.label)}</span>
+                        </div>`;
+                }).join('');
+            }
+
+            const pendingPercent = dashboardPercent(pendingRows.length, totalReports);
+            const fixingPercent = dashboardPercent(fixingRows.length, totalReports);
+            const resolvedPercent = dashboardPercent(resolvedRows.length, totalReports);
+            const donut = document.getElementById('dashboard-status-donut');
+            if (donut) {
+                const pendingEnd = pendingPercent;
+                const fixingEnd = Math.min(100, pendingEnd + fixingPercent);
+                const resolvedEnd = Math.min(100, fixingEnd + resolvedPercent);
+                donut.style.setProperty(
+                    '--dashboard-donut-bg',
+                    totalReports
+                        ? `conic-gradient(#f59e0b 0 ${pendingEnd}%, #f97316 ${pendingEnd}% ${fixingEnd}%, #22c55e ${fixingEnd}% ${resolvedEnd}%, #e2e8f0 ${resolvedEnd}% 100%)`
+                        : 'conic-gradient(#e2e8f0 0 100%)'
+                );
+            }
+
+            const legend = document.getElementById('dashboard-status-legend');
+            if (legend) {
+                const legendRows = [
+                    { label: 'Chờ xử lý', count: pendingRows.length, color: '#f59e0b' },
+                    { label: 'Đang sửa', count: fixingRows.length, color: '#f97316' },
+                    { label: 'Đã xong', count: resolvedRows.length, color: '#22c55e' }
+                ];
+                legend.innerHTML = legendRows.map(item => `
+                    <div class="dashboard-legend-row">
+                        <span class="dashboard-legend-dot" style="background:${item.color}"></span>
+                        <span>${item.label}</span>
+                        <strong>${item.count}</strong>
+                    </div>`).join('');
+            }
+
+            const vendors = new Map();
+            rows.forEach(item => {
+                const vendorName = String(item.vendor_name || '').trim();
+                const vendorId = String(item.vendor_id || '').trim();
+                const key = `${vendorId}__${vendorName}` || 'unknown';
+                const current = vendors.get(key) || {
+                    name: vendorName || 'Chưa xác định NCC',
+                    id: vendorId || '',
+                    reports: 0,
+                    quantity: 0
+                };
+                current.reports += 1;
+                current.quantity += Number(item.quantity) || 0;
+                vendors.set(key, current);
+            });
+
+            const topVendors = [...vendors.values()]
+                .sort((a, b) => b.reports - a.reports || b.quantity - a.quantity)
+                .slice(0, 5);
+            const vendorContainer = document.getElementById('dashboard-top-vendors');
+            if (vendorContainer) {
+                if (!topVendors.length) {
+                    vendorContainer.innerHTML = '<div class="dashboard-empty"><i class="fas fa-building-circle-exclamation"></i><span>Chưa có dữ liệu nhà cung cấp trong kỳ này.</span></div>';
+                } else {
+                    const maxVendorReports = Math.max(1, ...topVendors.map(item => item.reports));
+                    vendorContainer.innerHTML = topVendors.map((item, index) => `
+                        <div class="dashboard-vendor-row">
+                            <span class="dashboard-rank">${index + 1}</span>
+                            <div class="dashboard-vendor-main">
+                                <div class="dashboard-vendor-name">
+                                    <span title="${escapeHtmlAttr(item.name)}">${escapeHtml(item.name)}</span>
+                                    <span>${item.reports} báo cáo</span>
+                                </div>
+                                <div class="dashboard-vendor-progress"><span style="width:${Math.max(8, Math.round((item.reports / maxVendorReports) * 100))}%"></span></div>
+                            </div>
+                            <span class="dashboard-vendor-total">SL ${item.quantity}</span>
+                        </div>`).join('');
+                }
+            }
+
+            const severityRank = { High: 3, Medium: 2, Low: 1 };
+            const priorityRows = unresolvedRows
+                .sort((a, b) => {
+                    const severityDifference = (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0);
+                    if (severityDifference) return severityDifference;
+                    const aDate = getValidDashboardDate(a.created_at)?.getTime() || Date.now();
+                    const bDate = getValidDashboardDate(b.created_at)?.getTime() || Date.now();
+                    return aDate - bDate;
+                })
+                .slice(0, 5);
+
+            setDashboardText('dashboard-priority-count', `${unresolvedRows.length} mục`);
+            const priorityContainer = document.getElementById('dashboard-priority-list');
+            if (priorityContainer) {
+                if (!priorityRows.length) {
+                    priorityContainer.innerHTML = '<div class="dashboard-empty"><i class="fas fa-circle-check"></i><span>Không có hàng lỗi tồn đọng trong kỳ này.</span></div>';
+                } else {
+                    priorityContainer.innerHTML = priorityRows.map(item => `
+                        <button type="button" class="dashboard-priority-item" onclick="openStatusModal('${escapeJsString(item.id)}')">
+                            <span class="dashboard-priority-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                            <span class="dashboard-priority-copy">
+                                <span class="dashboard-priority-name">${escapeHtml(item.product_name || 'Sản phẩm chưa có tên')}</span>
+                                <span class="dashboard-priority-meta">${escapeHtml(item.vendor_name || 'Chưa có NCC')} · ITEM ${escapeHtml(item.sku || 'N/A')}</span>
+                            </span>
+                            <span class="dashboard-priority-age">
+                                <span>${formatDashboardAge(item.created_at)}</span>
+                                <span class="dashboard-priority-status ${getStatusClass(item.status)}">${getStatusText(item.status)}</span>
+                            </span>
+                        </button>`).join('');
+                }
+            }
+        }
+
         function renderDashboard() {
+            renderDashboardAnalytics();
 			const listContainer = document.getElementById('defect-list');
 			listContainer.classList.add('opacity-50');
             let filtered = getSearchFilteredRows('dashboard');
@@ -1818,6 +2123,7 @@ let defectsData = [];
 			filtered = applyTableSort(filtered, 'dashboard');
 			updateSortIndicators('dashboard');
             updateFilterIndicators('dashboard');
+            setDashboardText('dashboard-visible-count', `${filtered.length.toLocaleString('vi-VN')} mục`);
 
             defectList.innerHTML = filtered.map(d => `
 				<tr onclick="openStatusModal('${d.id}')" class="hover:bg-slate-50 group cursor-pointer">
@@ -2845,12 +3151,7 @@ let defectsData = [];
         const getStatusClass = (s) => ({'Resolved':'bg-green-100 text-green-800 border-green-200','Fixing':'bg-orange-100 text-orange-800 border-orange-200','Pending':'bg-yellow-100 text-yellow-800 border-yellow-200'}[s] || 'bg-slate-50');
 
         const updateStats = () => {
-			const totalItems = defectsData.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-			document.getElementById('stat-total').innerText = totalItems;
-            //document.getElementById('stat-total').innerText = defectsData.length;
-            document.getElementById('stat-pending').innerText = defectsData.filter(d => d.status === 'Pending').length;
-            document.getElementById('stat-fixing').innerText = defectsData.filter(d => d.status === 'Fixing').length;
-            document.getElementById('stat-resolved').innerText = defectsData.filter(d => d.status === 'Resolved').length;
+            renderDashboardAnalytics();
         };
 
         searchInput.oninput = renderDashboard;
@@ -4161,3 +4462,854 @@ let defectsData = [];
             window.addEventListener('resize', requestUpdate, { passive: true });
             document.addEventListener('DOMContentLoaded', requestUpdate);
         })();
+
+
+/* ========================================================================== 
+   DASHBOARD V2.0 - workflow, KPI đồng nhất, lọc nhanh và chống chèn HTML
+   ========================================================================== */
+
+function safeImageUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+        const url = new URL(raw, window.location.href);
+        if (url.protocol === 'https:' || url.protocol === 'http:' || url.protocol === 'blob:') return url.href;
+        if (url.protocol === 'data:' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(raw)) return raw;
+    } catch (error) {}
+    return '';
+}
+
+function getSafeGalleryUrls(urls) {
+    return (Array.isArray(urls) ? urls : [urls])
+        .map(safeImageUrl)
+        .filter(Boolean)
+        .filter((url, index, arr) => arr.indexOf(url) === index);
+}
+
+function renderDefectImages(defect, mode = 'desktop') {
+    const urls = getSafeGalleryUrls(getDefectImageUrls(defect));
+    const isMobile = mode.includes('mobile');
+    const emptySize = isMobile ? 'w-20 h-20' : 'w-12 h-12';
+    const emptyIcon = isMobile ? 'text-2xl' : '';
+
+    if (!urls.length) {
+        return `<div class="${emptySize} rounded-xl bg-slate-100 flex items-center justify-center text-slate-300 shrink-0">
+            <i class="fas fa-image ${emptyIcon}"></i>
+        </div>`;
+    }
+
+    const imagesJson = encodeImageUrlsAttr(urls);
+    const previewClass = isMobile ? 'defect-image-review defect-image-review-mobile' : 'defect-image-review defect-image-review-desktop';
+    const countBadge = urls.length > 1
+        ? `<span class="defect-image-review-count"><i class="fas fa-images"></i> 1/${urls.length}</span>`
+        : `<span class="defect-image-review-count single"><i class="fas fa-search-plus"></i></span>`;
+
+    return `<button type="button" class="${previewClass}" data-images="${imagesJson}"
+        onclick="event.stopPropagation(); openDefectImageGallery(JSON.parse(this.dataset.images || '[]'), 0)"
+        title="Bấm để xem ${urls.length} ảnh">
+        <img src="${escapeHtmlAttr(urls[0])}" alt="Ảnh lỗi 1/${urls.length}" loading="lazy">
+        ${countBadge}
+    </button>`;
+}
+
+function getDashboardStoredValue(key, fallback = '') {
+    try { return localStorage.getItem(`dashboard_v2_${key}`) ?? fallback; }
+    catch (error) { return fallback; }
+}
+
+function setDashboardStoredValue(key, value) {
+    try { localStorage.setItem(`dashboard_v2_${key}`, String(value ?? '')); }
+    catch (error) {}
+}
+
+let dashboardSettingsRestored = false;
+
+function dateToInputValue(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function dateTimeToInputValue(value) {
+    const date = getValidDashboardDate(value);
+    if (!date) return '';
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function restoreDashboardSettings() {
+    if (dashboardSettingsRestored) return;
+    dashboardSettingsRestored = true;
+
+    const period = document.getElementById('dashboard-period');
+    const from = document.getElementById('dashboard-date-from');
+    const to = document.getElementById('dashboard-date-to');
+    const status = document.getElementById('filter-status');
+    const severity = document.getElementById('filter-severity');
+    const aging = document.getElementById('filter-aging');
+
+    const savedPeriod = getDashboardStoredValue('period', '30');
+    if (period && [...period.options].some(option => option.value === savedPeriod)) period.value = savedPeriod;
+
+    const now = new Date();
+    const monthAgo = new Date(now.getTime() - 29 * 86400000);
+    if (from) from.value = getDashboardStoredValue('date_from', dateToInputValue(monthAgo));
+    if (to) to.value = getDashboardStoredValue('date_to', dateToInputValue(now));
+
+    const savedStatus = getDashboardStoredValue('status', 'All');
+    const savedSeverity = getDashboardStoredValue('severity', 'All');
+    const savedAging = getDashboardStoredValue('aging', 'All');
+    if (status && [...status.options].some(option => option.value === savedStatus)) status.value = savedStatus;
+    if (severity && [...severity.options].some(option => option.value === savedSeverity)) severity.value = savedSeverity;
+    if (aging && [...aging.options].some(option => option.value === savedAging)) aging.value = savedAging;
+
+    const collapsed = getDashboardStoredValue('collapsed', 'false') === 'true';
+    setDashboardCollapsed(collapsed, false);
+    updateDashboardCustomRangeVisibility();
+}
+
+function rememberDashboardFilters() {
+    setDashboardStoredValue('status', document.getElementById('filter-status')?.value || 'All');
+    setDashboardStoredValue('severity', document.getElementById('filter-severity')?.value || 'All');
+    setDashboardStoredValue('aging', document.getElementById('filter-aging')?.value || 'All');
+}
+
+function updateDashboardCustomRangeVisibility() {
+    const period = document.getElementById('dashboard-period')?.value || '30';
+    document.getElementById('dashboard-custom-range')?.classList.toggle('hidden', period !== 'custom');
+}
+
+function handleDashboardPeriodChange() {
+    const value = document.getElementById('dashboard-period')?.value || '30';
+    setDashboardStoredValue('period', value);
+    updateDashboardCustomRangeVisibility();
+    if (value !== 'custom') renderDashboardAnalytics();
+}
+
+function applyDashboardCustomRange() {
+    const from = document.getElementById('dashboard-date-from')?.value || '';
+    const to = document.getElementById('dashboard-date-to')?.value || '';
+    if (!from || !to) {
+        window.showToast('Vui lòng chọn đầy đủ Từ ngày và Đến ngày.', 'warning');
+        return;
+    }
+    if (new Date(`${from}T00:00:00`) > new Date(`${to}T23:59:59.999`)) {
+        window.showToast('Từ ngày không được lớn hơn Đến ngày.', 'warning');
+        return;
+    }
+    setDashboardStoredValue('date_from', from);
+    setDashboardStoredValue('date_to', to);
+    renderDashboardAnalytics();
+}
+
+function setDashboardCollapsed(collapsed, persist = true) {
+    const content = document.getElementById('dashboard-analytics-content');
+    const button = document.getElementById('dashboard-collapse-btn');
+    if (!content || !button) return;
+    content.classList.toggle('dashboard-collapsed', collapsed);
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.querySelector('i')?.classList.toggle('fa-chevron-up', !collapsed);
+    button.querySelector('i')?.classList.toggle('fa-chevron-down', collapsed);
+    const label = button.querySelector('span');
+    if (label) label.textContent = collapsed ? 'Mở rộng' : 'Thu gọn';
+    if (persist) setDashboardStoredValue('collapsed', collapsed ? 'true' : 'false');
+}
+
+function toggleDashboardAnalytics() {
+    const content = document.getElementById('dashboard-analytics-content');
+    setDashboardCollapsed(!content?.classList.contains('dashboard-collapsed'));
+}
+
+function handleDashboardCardKey(event, status) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    applyDashboardStatusFilter(status);
+}
+
+function scrollDashboardToDetails() {
+    document.getElementById('dashboard-detail-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function applyDashboardStatusFilter(status) {
+    const select = document.getElementById('filter-status');
+    if (select) select.value = status;
+    rememberDashboardFilters();
+    renderDashboard();
+    scrollDashboardToDetails();
+}
+
+function applyDashboardAgingFilter(value) {
+    const status = document.getElementById('filter-status');
+    const aging = document.getElementById('filter-aging');
+    if (status) status.value = 'All';
+    if (aging) aging.value = value;
+    rememberDashboardFilters();
+    renderDashboard();
+    scrollDashboardToDetails();
+}
+
+function filterDashboardByVendor(vendorName) {
+    const search = document.getElementById('search-input');
+    if (search) search.value = String(vendorName || '');
+    renderDashboard();
+    scrollDashboardToDetails();
+}
+
+function getDashboardPeriodConfig() {
+    restoreDashboardSettings();
+    const value = document.getElementById('dashboard-period')?.value || '30';
+    const now = new Date();
+
+    if (value === 'custom') {
+        const fromValue = document.getElementById('dashboard-date-from')?.value;
+        const toValue = document.getElementById('dashboard-date-to')?.value;
+        const start = fromValue ? new Date(`${fromValue}T00:00:00`) : new Date(now.getTime() - 29 * 86400000);
+        const end = toValue ? new Date(`${toValue}T23:59:59.999`) : now;
+        const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1);
+        return { value, days, start, end, label: `${start.toLocaleDateString('vi-VN')} – ${end.toLocaleDateString('vi-VN')}`, bucketCount: Math.min(12, Math.max(5, days)) };
+    }
+
+    const configs = {
+        '7': { value: '7', days: 7, label: '7 ngày gần nhất', bucketCount: 7 },
+        '30': { value: '30', days: 30, label: '30 ngày gần nhất', bucketCount: 10 },
+        '90': { value: '90', days: 90, label: '90 ngày gần nhất', bucketCount: 9 },
+        'all': { value: 'all', days: null, label: 'toàn bộ dữ liệu', bucketCount: 12 }
+    };
+    const config = configs[value] || configs['30'];
+    if (config.value !== 'all') {
+        config.end = now;
+        config.start = new Date(now.getTime() - config.days * 86400000);
+    }
+    return config;
+}
+
+function getDashboardPeriodRows(config, periodOffset = 0) {
+    if (config.value === 'all' && periodOffset === 0) return [...defectsData];
+    if (config.value === 'all') return [];
+
+    const duration = Math.max(86400000, config.end.getTime() - config.start.getTime());
+    const end = config.end.getTime() - periodOffset * duration;
+    const start = config.start.getTime() - periodOffset * duration;
+
+    return defectsData.filter(item => {
+        const date = getValidDashboardDate(item.created_at);
+        if (!date) return false;
+        return date.getTime() >= start && date.getTime() <= end;
+    });
+}
+
+function getDashboardTrendBuckets(rows, config) {
+    const now = new Date();
+    const rangeEnd = config.value === 'all' ? now : config.end;
+    const rangeStart = config.value === 'all' ? new Date(now.getTime() - 365 * 86400000) : config.start;
+    const count = Math.max(1, config.bucketCount || 10);
+    const bucketSize = Math.max(1, (rangeEnd.getTime() - rangeStart.getTime()) / count);
+
+    const buckets = Array.from({ length: count }, (_, index) => {
+        const start = rangeStart.getTime() + index * bucketSize;
+        const end = index === count - 1 ? rangeEnd.getTime() + 1 : start + bucketSize;
+        const labelDate = new Date(start + bucketSize / 2);
+        let label = `${String(labelDate.getDate()).padStart(2, '0')}/${String(labelDate.getMonth() + 1).padStart(2, '0')}`;
+        if ((config.days || 365) <= 7) label = labelDate.toLocaleDateString('vi-VN', { weekday: 'short' });
+        else if (config.value === 'all') label = `T${labelDate.getMonth() + 1}`;
+        return { start, end, label, count: 0, quantity: 0 };
+    });
+
+    rows.forEach(item => {
+        const date = getValidDashboardDate(item.created_at);
+        if (!date) return;
+        const bucket = buckets.find(entry => date.getTime() >= entry.start && date.getTime() < entry.end);
+        if (!bucket) return;
+        bucket.count += 1;
+        bucket.quantity += Number(item.quantity) || 0;
+    });
+    return buckets;
+}
+
+function getDefectAgeDays(item) {
+    const created = getValidDashboardDate(item?.created_at);
+    if (!created) return 0;
+    return Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
+}
+
+function getDefectDueDate(item) {
+    return getValidDashboardDate(item?.due_at);
+}
+
+function isDefectOverdue(item) {
+    const due = getDefectDueDate(item);
+    return item?.status !== 'Resolved' && !!due && due.getTime() < Date.now();
+}
+
+function isDefectDueSoon(item) {
+    const due = getDefectDueDate(item);
+    if (item?.status === 'Resolved' || !due) return false;
+    const diff = due.getTime() - Date.now();
+    return diff >= 0 && diff <= 48 * 3600000;
+}
+
+function formatDashboardDuration(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return 'Chưa có dữ liệu';
+    const totalHours = Math.round(ms / 3600000);
+    if (totalHours < 1) return 'Dưới 1 giờ';
+    if (totalHours < 24) return `${totalHours} giờ`;
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return hours ? `${days} ngày ${hours} giờ` : `${days} ngày`;
+}
+
+function getResolutionDurationMs(item) {
+    const created = getValidDashboardDate(item?.created_at);
+    const resolved = getValidDashboardDate(item?.resolved_at);
+    if (!created || !resolved || resolved < created) return null;
+    return resolved.getTime() - created.getTime();
+}
+
+function getDueLabel(item) {
+    const due = getDefectDueDate(item);
+    if (!due) return '';
+    if (isDefectOverdue(item)) {
+        const days = Math.max(1, Math.ceil((Date.now() - due.getTime()) / 86400000));
+        return `Quá hạn ${days} ngày`;
+    }
+    return `Hạn ${due.toLocaleDateString('vi-VN')}`;
+}
+
+function getWorkflowMetaHtml(item) {
+    const assigned = item?.assigned_to ? `<span><i class="fas fa-user-check"></i> ${escapeHtml(item.assigned_to)}</span>` : '';
+    const dueLabel = getDueLabel(item);
+    const dueClass = isDefectOverdue(item) ? 'workflow-meta-overdue' : (isDefectDueSoon(item) ? 'workflow-meta-soon' : '');
+    const due = dueLabel ? `<span class="${dueClass}"><i class="fas fa-calendar-day"></i> ${escapeHtml(dueLabel)}</span>` : '';
+    if (!assigned && !due) return '';
+    return `<div class="workflow-row-meta">${assigned}${due}</div>`;
+}
+
+function getSearchFilteredRows(tableName) {
+    if (tableName === 'dashboard') {
+        const query = (searchInput?.value || '').toLowerCase().trim();
+        const statusFilter = document.getElementById('filter-status')?.value || 'All';
+        const severityFilter = document.getElementById('filter-severity')?.value || 'All';
+        const agingFilter = document.getElementById('filter-aging')?.value || 'All';
+
+        return defectsData.filter(d => {
+            if (statusFilter === 'All' && d.status === 'Resolved') return false;
+            if (statusFilter !== 'All' && d.status !== statusFilter) return false;
+            if (severityFilter !== 'All' && d.severity !== severityFilter) return false;
+            if (agingFilter === 'overdue' && !isDefectOverdue(d)) return false;
+            if (agingFilter === 'dueSoon' && !isDefectDueSoon(d)) return false;
+            if (agingFilter === 'older7' && (d.status === 'Resolved' || getDefectAgeDays(d) < 7)) return false;
+
+            const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''} ${d.assigned_to || ''}`.toLowerCase();
+            if (!query) return true;
+            if (query.includes('*')) {
+                const pattern = wildcardToRegex(query);
+                return [d.product_name, d.barcode, d.sku, d.vendor_name, d.vendor_id, d.defect_type, d.assigned_to].some(value => pattern.test(value || ''));
+            }
+            return searchStr.includes(query);
+        });
+    }
+
+    if (tableName === 'history') {
+        const query = (historySearch?.value || '').toLowerCase().trim();
+        return defectsData.filter(d => {
+            if (d.status !== 'Resolved') return false;
+            return `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''} ${d.assigned_to || ''} ${d.resolution_note || ''}`.toLowerCase().includes(query);
+        });
+    }
+    if (tableName === 'catalog') {
+        const query = (catalogSearch?.value || '').toLowerCase().trim();
+        return catalogData.filter(c => `${c.barcode || ''} ${c.product_name || ''} ${c.sku || ''} ${c.vendor_name || ''} ${c.vendor_id || ''}`.toLowerCase().includes(query));
+    }
+    if (tableName === 'users') {
+        const query = (usersSearch?.value || '').toLowerCase().trim();
+        return appUsers.filter(u => `${u.username || ''} ${u.full_name || ''} ${u.role || ''} ${u.active ? 'Hoạt động' : 'Đã khóa'}`.toLowerCase().includes(query));
+    }
+    return [];
+}
+
+function renderDashboardAnalytics() {
+    restoreDashboardSettings();
+    const periodSelect = document.getElementById('dashboard-period');
+    if (!periodSelect) return;
+
+    const config = getDashboardPeriodConfig();
+    const rows = getDashboardPeriodRows(config, 0);
+    const previousRows = config.value === 'all' ? [] : getDashboardPeriodRows(config, 1);
+    const totalReports = rows.length;
+    const totalQuantity = sumDashboardQuantity(rows);
+    const pendingRows = rows.filter(item => item.status === 'Pending');
+    const fixingRows = rows.filter(item => item.status === 'Fixing');
+    const resolvedRows = rows.filter(item => item.status === 'Resolved');
+    const allUnresolvedRows = defectsData.filter(item => item.status !== 'Resolved');
+    const completionRate = dashboardPercent(resolvedRows.length, totalReports);
+
+    setDashboardText('stat-total', totalQuantity.toLocaleString('vi-VN'));
+    setDashboardText('stat-pending', sumDashboardQuantity(pendingRows).toLocaleString('vi-VN'));
+    setDashboardText('stat-fixing', sumDashboardQuantity(fixingRows).toLocaleString('vi-VN'));
+    setDashboardText('stat-resolved', sumDashboardQuantity(resolvedRows).toLocaleString('vi-VN'));
+    setDashboardText('dashboard-total-reports', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
+    setDashboardText('dashboard-pending-share', `${pendingRows.length.toLocaleString('vi-VN')} báo cáo · ${dashboardPercent(pendingRows.length, totalReports)}%`);
+    setDashboardText('dashboard-fixing-share', `${fixingRows.length.toLocaleString('vi-VN')} báo cáo · ${dashboardPercent(fixingRows.length, totalReports)}%`);
+    setDashboardText('dashboard-completion-rate', `${resolvedRows.length.toLocaleString('vi-VN')} báo cáo · ${completionRate}%`);
+    setDashboardText('dashboard-donut-rate', `${completionRate}%`);
+    setDashboardText('dashboard-trend-total', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
+
+    const caption = document.getElementById('dashboard-period-caption');
+    if (caption) caption.textContent = config.value === 'all'
+        ? 'Theo dõi toàn bộ dữ liệu hàng lỗi. Biểu đồ xu hướng hiển thị 12 tháng gần nhất.'
+        : `Theo dõi tình trạng hàng lỗi trong ${config.label}.`;
+
+    const todayKey = new Date().toDateString();
+    const resolvedToday = defectsData.filter(item => {
+        const date = getValidDashboardDate(item.resolved_at);
+        return item.status === 'Resolved' && date?.toDateString() === todayKey;
+    });
+    setDashboardText('dashboard-today-count', `Hôm nay: ${resolvedToday.length} hoàn thành`);
+    setDashboardText('dashboard-resolved-today', `${resolvedToday.length} báo cáo`);
+
+    const oldestOpen = [...allUnresolvedRows]
+        .map(item => getValidDashboardDate(item.created_at))
+        .filter(Boolean)
+        .sort((a, b) => a - b)[0];
+    setDashboardText('dashboard-oldest-open', oldestOpen ? `Tồn lâu nhất: ${formatDashboardAge(oldestOpen)}` : 'Không có tồn đọng');
+
+    const durations = resolvedRows.map(getResolutionDurationMs).filter(value => value !== null);
+    const avgDuration = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null;
+    setDashboardText('dashboard-avg-resolution', avgDuration === null ? 'Chưa có dữ liệu' : formatDashboardDuration(avgDuration));
+    setDashboardText('dashboard-overdue-count', `${allUnresolvedRows.filter(isDefectOverdue).length} mục`);
+    setDashboardText('dashboard-open-over7', `${allUnresolvedRows.filter(item => getDefectAgeDays(item) >= 7).length} mục`);
+
+    const trendElement = document.getElementById('dashboard-total-trend');
+    if (trendElement) {
+        if (config.value === 'all') {
+            trendElement.className = 'dashboard-trend neutral';
+            trendElement.innerHTML = '<i class="fas fa-database"></i> Toàn bộ dữ liệu';
+        } else {
+            const previousQuantity = sumDashboardQuantity(previousRows);
+            if (!previousQuantity && !totalQuantity) {
+                trendElement.className = 'dashboard-trend neutral';
+                trendElement.innerHTML = '<i class="fas fa-minus"></i> Không đổi';
+            } else if (!previousQuantity) {
+                trendElement.className = 'dashboard-trend down';
+                trendElement.innerHTML = '<i class="fas fa-arrow-up"></i> Phát sinh mới';
+            } else {
+                const difference = Math.round(((totalQuantity - previousQuantity) / previousQuantity) * 100);
+                trendElement.className = difference > 0 ? 'dashboard-trend down' : difference < 0 ? 'dashboard-trend up' : 'dashboard-trend neutral';
+                trendElement.innerHTML = difference > 0
+                    ? `<i class="fas fa-arrow-up"></i> +${Math.abs(difference)}% so kỳ trước`
+                    : difference < 0
+                        ? `<i class="fas fa-arrow-down"></i> -${Math.abs(difference)}% so kỳ trước`
+                        : '<i class="fas fa-minus"></i> Không đổi';
+            }
+        }
+    }
+
+    const trendContainer = document.getElementById('dashboard-trend-bars');
+    if (trendContainer) {
+        const trendSource = config.value === 'all'
+            ? defectsData.filter(item => {
+                const date = getValidDashboardDate(item.created_at);
+                return date && date >= new Date(Date.now() - 365 * 86400000);
+            })
+            : rows;
+        const buckets = getDashboardTrendBuckets(trendSource, config);
+        const maxCount = Math.max(1, ...buckets.map(bucket => bucket.count));
+        trendContainer.innerHTML = buckets.map(bucket => {
+            const height = bucket.count ? Math.max(7, Math.round((bucket.count / maxCount) * 100)) : 2;
+            return `<div class="dashboard-bar-item" title="${bucket.count} báo cáo, số lượng ${bucket.quantity}">
+                <div class="dashboard-bar-track"><div class="dashboard-bar" style="height:${height}%"><span class="dashboard-bar-value">${bucket.count}</span></div></div>
+                <span class="dashboard-bar-label">${escapeHtml(bucket.label)}</span>
+            </div>`;
+        }).join('');
+    }
+
+    const pendingPercent = dashboardPercent(pendingRows.length, totalReports);
+    const fixingPercent = dashboardPercent(fixingRows.length, totalReports);
+    const resolvedPercent = dashboardPercent(resolvedRows.length, totalReports);
+    const donut = document.getElementById('dashboard-status-donut');
+    if (donut) {
+        const pendingEnd = pendingPercent;
+        const fixingEnd = Math.min(100, pendingEnd + fixingPercent);
+        const resolvedEnd = Math.min(100, fixingEnd + resolvedPercent);
+        donut.style.setProperty('--dashboard-donut-bg', totalReports
+            ? `conic-gradient(#f59e0b 0 ${pendingEnd}%, #f97316 ${pendingEnd}% ${fixingEnd}%, #22c55e ${fixingEnd}% ${resolvedEnd}%, #e2e8f0 ${resolvedEnd}% 100%)`
+            : 'conic-gradient(#e2e8f0 0 100%)');
+    }
+
+    const legend = document.getElementById('dashboard-status-legend');
+    if (legend) {
+        const legendRows = [
+            { label: 'Chờ xử lý', rows: pendingRows, color: '#f59e0b' },
+            { label: 'Đang sửa', rows: fixingRows, color: '#f97316' },
+            { label: 'Đã xong', rows: resolvedRows, color: '#22c55e' }
+        ];
+        legend.innerHTML = legendRows.map(item => `<div class="dashboard-legend-row">
+            <span class="dashboard-legend-dot" style="background:${item.color}"></span>
+            <span>${item.label}</span>
+            <strong>${item.rows.length} BC · SL ${sumDashboardQuantity(item.rows)}</strong>
+        </div>`).join('');
+    }
+
+    const vendors = new Map();
+    rows.forEach(item => {
+        const vendorName = String(item.vendor_name || '').trim();
+        const vendorId = String(item.vendor_id || '').trim();
+        const key = `${vendorId}__${vendorName}`;
+        const current = vendors.get(key) || { name: vendorName || 'Chưa xác định NCC', id: vendorId, reports: 0, quantity: 0 };
+        current.reports += 1;
+        current.quantity += Number(item.quantity) || 0;
+        vendors.set(key, current);
+    });
+
+    const topVendors = [...vendors.values()].sort((a, b) => b.reports - a.reports || b.quantity - a.quantity).slice(0, 5);
+    const vendorContainer = document.getElementById('dashboard-top-vendors');
+    if (vendorContainer) {
+        if (!topVendors.length) {
+            vendorContainer.innerHTML = '<div class="dashboard-empty"><i class="fas fa-building-circle-exclamation"></i><span>Chưa có dữ liệu nhà cung cấp trong kỳ này.</span></div>';
+        } else {
+            const maxVendorReports = Math.max(1, ...topVendors.map(item => item.reports));
+            vendorContainer.innerHTML = topVendors.map((item, index) => `<button type="button" class="dashboard-vendor-row" data-vendor="${escapeHtmlAttr(item.name)}" onclick="filterDashboardByVendor(this.dataset.vendor)">
+                <span class="dashboard-rank">${index + 1}</span>
+                <span class="dashboard-vendor-main">
+                    <span class="dashboard-vendor-name"><span title="${escapeHtmlAttr(item.name)}">${escapeHtml(item.name)}</span><span>${item.reports} báo cáo</span></span>
+                    <span class="dashboard-vendor-progress"><span style="width:${Math.max(8, Math.round((item.reports / maxVendorReports) * 100))}%"></span></span>
+                </span>
+                <span class="dashboard-vendor-total">SL ${item.quantity}</span>
+            </button>`).join('');
+        }
+    }
+
+    const severityRank = { High: 3, Medium: 2, Low: 1 };
+    const priorityRows = [...allUnresolvedRows]
+        .sort((a, b) => {
+            const overdueDiff = Number(isDefectOverdue(b)) - Number(isDefectOverdue(a));
+            if (overdueDiff) return overdueDiff;
+            const severityDiff = (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0);
+            if (severityDiff) return severityDiff;
+            const aDue = getDefectDueDate(a)?.getTime() || Number.MAX_SAFE_INTEGER;
+            const bDue = getDefectDueDate(b)?.getTime() || Number.MAX_SAFE_INTEGER;
+            if (aDue !== bDue) return aDue - bDue;
+            return (getValidDashboardDate(a.created_at)?.getTime() || Date.now()) - (getValidDashboardDate(b.created_at)?.getTime() || Date.now());
+        })
+        .slice(0, 6);
+
+    setDashboardText('dashboard-priority-count', `${allUnresolvedRows.length} mục`);
+    const priorityContainer = document.getElementById('dashboard-priority-list');
+    if (priorityContainer) {
+        if (!priorityRows.length) {
+            priorityContainer.innerHTML = '<div class="dashboard-empty"><i class="fas fa-circle-check"></i><span>Không có hàng lỗi tồn đọng.</span></div>';
+        } else {
+            priorityContainer.innerHTML = priorityRows.map(item => {
+                const dueLabel = getDueLabel(item);
+                return `<button type="button" class="dashboard-priority-item ${isDefectOverdue(item) ? 'is-overdue' : ''}" data-id="${escapeHtmlAttr(item.id)}" onclick="openStatusModal(this.dataset.id)">
+                    <span class="dashboard-priority-icon"><i class="fas ${isDefectOverdue(item) ? 'fa-calendar-xmark' : 'fa-triangle-exclamation'}"></i></span>
+                    <span class="dashboard-priority-copy">
+                        <span class="dashboard-priority-name">${escapeHtml(item.product_name || 'Sản phẩm chưa có tên')}</span>
+                        <span class="dashboard-priority-meta">${escapeHtml(item.vendor_name || 'Chưa có NCC')} · ITEM ${escapeHtml(item.sku || 'N/A')}${item.assigned_to ? ` · ${escapeHtml(item.assigned_to)}` : ''}</span>
+                    </span>
+                    <span class="dashboard-priority-age">
+                        <span class="${isDefectOverdue(item) ? 'text-red-600' : ''}">${escapeHtml(dueLabel || formatDashboardAge(item.created_at))}</span>
+                        <span class="dashboard-priority-status ${getStatusClass(item.status)}">${getStatusText(item.status)}</span>
+                    </span>
+                </button>`;
+            }).join('');
+        }
+    }
+}
+
+function updateDashboardActiveCards() {
+    const active = document.getElementById('filter-status')?.value || 'All';
+    document.querySelectorAll('[data-status-card]').forEach(card => card.classList.toggle('is-active-filter', card.dataset.statusCard === active));
+}
+
+function renderDashboard() {
+    restoreDashboardSettings();
+    renderDashboardAnalytics();
+    updateDashboardActiveCards();
+    const listContainer = document.getElementById('defect-list');
+    if (!listContainer) return;
+    listContainer.classList.add('opacity-50');
+    let filtered = getSearchFilteredRows('dashboard');
+    filtered = applyTableFilters(filtered, 'dashboard');
+    filtered = applyTableSort([...filtered], 'dashboard');
+    updateSortIndicators('dashboard');
+    updateFilterIndicators('dashboard');
+    setDashboardText('dashboard-visible-count', `${filtered.length.toLocaleString('vi-VN')} mục`);
+
+    listContainer.innerHTML = filtered.map(d => {
+        const id = escapeHtmlAttr(d.id);
+        return `<tr data-id="${id}" onclick="openStatusModal(this.dataset.id)" class="hover:bg-slate-50 group cursor-pointer ${isDefectOverdue(d) ? 'workflow-row-overdue' : ''}">
+            <td class="px-6 py-4 whitespace-nowrap"><div class="text-xs text-slate-600 font-medium">${escapeHtml(formatDateTime(d.created_at))}</div></td>
+            <td class="px-6 py-4"><div class="flex items-center gap-3">${renderDefectImages(d, 'desktop')}<div>
+                <div class="font-semibold text-slate-800">${escapeHtml(d.product_name || 'N/A')}</div>
+                <div class="flex flex-col gap-1 mt-1">
+                    <span class="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit">ITEM: ${escapeHtml(d.sku || 'N/A')}</span>
+                    <span class="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded w-fit">BC: ${escapeHtml(d.barcode || 'N/A')}</span>
+                    <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded w-fit">SL: ${escapeHtml(d.quantity || 1)}</span>
+                </div>${getWorkflowMetaHtml(d)}
+            </div></div></td>
+            <td class="px-6 py-4 text-sm text-slate-700">${escapeHtml(d.vendor_name || '-')}</td>
+            <td class="px-6 py-4 text-sm font-mono text-slate-600">${escapeHtml(d.vendor_id || '-')}</td>
+            <td class="px-6 py-4"><div class="text-sm font-medium">${escapeHtml(d.defect_type || 'Lỗi chưa xác định')}</div><span class="text-[10px] px-2 py-0.5 rounded-full border font-bold ${getSevClass(d.severity)}">${escapeHtml(d.severity || 'Medium')}</span></td>
+            <td class="px-6 py-4"><span class="inline-flex items-center whitespace-nowrap text-sm rounded-lg border px-3 py-1 font-medium ${getStatusClass(d.status)}">${getStatusText(d.status)}</span>${d.resolution_note ? `<div class="workflow-note-preview" title="${escapeHtmlAttr(d.resolution_note)}">${escapeHtml(d.resolution_note)}</div>` : ''}</td>
+            <td class="px-6 py-4 text-right">${isAdmin() ? `<button data-id="${id}" onclick="event.stopPropagation(); deleteItem('defects', this.dataset.id)" class="text-red-500 bg-red-50 px-3 py-2 rounded-xl"><i class="fas fa-trash"></i></button>` : ''}</td>
+        </tr>`;
+    }).join('');
+    listContainer.classList.remove('opacity-50');
+
+    const mobileList = document.getElementById('defect-mobile-list');
+    if (mobileList) mobileList.innerHTML = filtered.map(d => {
+        const id = escapeHtmlAttr(d.id);
+        return `<div data-id="${id}" onclick="openStatusModal(this.dataset.id)" class="bg-white border ${isDefectOverdue(d) ? 'border-red-300' : 'border-slate-200'} rounded-2xl p-4 shadow-sm active:scale-[0.99] transition cursor-pointer">
+            <div class="flex gap-3">${renderDefectImages(d, 'mobile')}<div class="flex-1 min-w-0">
+                <div class="font-bold text-slate-800 text-base leading-snug">${escapeHtml(d.product_name || 'N/A')}</div>
+                <div class="text-xs text-slate-500 mt-1">${escapeHtml(formatDateTime(d.created_at))}</div>
+                <div class="flex flex-wrap gap-1 mt-2">
+                    <span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">ITEM: ${escapeHtml(d.sku || 'N/A')}</span>
+                    <span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">BC: ${escapeHtml(d.barcode || 'N/A')}</span>
+                    <span class="text-[11px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">SL: ${escapeHtml(d.quantity || 1)}</span>
+                </div>${getWorkflowMetaHtml(d)}
+            </div></div>
+            <div class="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div class="bg-slate-50 rounded-xl p-2"><div class="text-slate-400">Tên NCC</div><div class="font-semibold text-slate-700">${escapeHtml(d.vendor_name || '-')}</div></div>
+                <div class="bg-slate-50 rounded-xl p-2"><div class="text-slate-400">Mã NCC</div><div class="font-mono font-semibold text-slate-700">${escapeHtml(d.vendor_id || '-')}</div></div>
+            </div>
+            <div class="mt-3"><div class="text-xs text-slate-400">Mô tả lỗi</div><div class="font-medium text-sm text-slate-700">${escapeHtml(d.defect_type || 'Lỗi chưa xác định')}</div></div>
+            ${d.resolution_note ? `<div class="mt-2 text-xs bg-green-50 text-green-700 rounded-xl p-2"><b>Kết quả:</b> ${escapeHtml(d.resolution_note)}</div>` : ''}
+            <div class="mt-3 flex items-center justify-between"><span class="text-xs rounded-full border px-3 py-1 font-bold ${getStatusClass(d.status)}">${getStatusText(d.status)}</span>${isAdmin() ? `<button data-id="${id}" onclick="event.stopPropagation(); deleteItem('defects', this.dataset.id)" class="text-red-500 bg-red-50 px-3 py-2 rounded-xl"><i class="fas fa-trash"></i></button>` : ''}</div>
+        </div>`;
+    }).join('');
+}
+
+function renderHistory() {
+    let rows = getSearchFilteredRows('history');
+    rows = applyTableFilters(rows, 'history');
+    rows = applyTableSort([...rows], 'history');
+    updateSortIndicators('history');
+    updateFilterIndicators('history');
+
+    historyList.innerHTML = rows.map(d => {
+        const id = escapeHtmlAttr(d.id);
+        const duration = getResolutionDurationMs(d);
+        return `<tr class="hover:bg-slate-50 group">
+            <td class="px-6 py-4 whitespace-nowrap"><div class="text-xs text-slate-600 font-medium">${escapeHtml(formatDateTime(d.created_at))}</div>${d.resolved_at ? `<div class="text-[10px] text-green-600 mt-1">Xong: ${escapeHtml(formatDateTime(d.resolved_at))}</div>` : ''}</td>
+            <td class="px-6 py-4"><div class="flex items-center gap-3">${renderDefectImages(d, 'desktop')}<div><div class="font-semibold text-slate-800">${escapeHtml(d.product_name || 'N/A')}</div><div class="flex flex-col gap-1 mt-1"><span class="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit">ITEM: ${escapeHtml(d.sku || 'N/A')}</span><span class="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded w-fit">BC: ${escapeHtml(d.barcode || 'N/A')}</span><span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded w-fit">SL: ${escapeHtml(d.quantity || 1)}</span></div>${getWorkflowMetaHtml(d)}</div></div></td>
+            <td class="px-6 py-4 text-sm text-slate-700">${escapeHtml(d.vendor_name || '-')}</td>
+            <td class="px-6 py-4 text-sm font-mono text-slate-600">${escapeHtml(d.vendor_id || '-')}</td>
+            <td class="px-6 py-4"><div class="text-sm font-medium">${escapeHtml(d.defect_type || 'Lỗi chưa xác định')}</div><span class="text-[10px] px-2 py-0.5 rounded-full border font-bold ${getSevClass(d.severity)}">${escapeHtml(d.severity || 'Medium')}</span>${d.resolution_note ? `<div class="workflow-note-preview" title="${escapeHtmlAttr(d.resolution_note)}">${escapeHtml(d.resolution_note)}</div>` : ''}</td>
+            <td class="px-6 py-4"><span class="inline-flex items-center whitespace-nowrap text-sm rounded-lg border px-3 py-1 font-medium ${getStatusClass(d.status)}">${getStatusText(d.status)}</span><div class="text-[10px] text-slate-500 mt-1">${duration === null ? 'Chưa có thời gian thực tế' : escapeHtml(formatDashboardDuration(duration))}</div></td>
+            <td class="px-6 py-4 text-right">${isAdmin() ? `<button data-id="${id}" onclick="event.stopPropagation(); deleteHistoryItem(this.dataset.id)" class="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl"><i class="fas fa-trash"></i></button>` : ''}</td>
+        </tr>`;
+    }).join('');
+
+    const mobile = document.getElementById('history-mobile-list');
+    if (mobile) mobile.innerHTML = rows.map(d => {
+        const id = escapeHtmlAttr(d.id);
+        const duration = getResolutionDurationMs(d);
+        return `<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><div class="flex gap-3">${renderDefectImages(d, 'history-mobile')}<div class="flex-1 min-w-0"><div class="font-bold text-slate-800 text-base leading-snug">${escapeHtml(d.product_name || 'N/A')}</div><div class="text-xs text-slate-500 mt-1">${escapeHtml(formatDateTime(d.created_at))}</div><div class="flex flex-wrap gap-1 mt-2"><span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">ITEM: ${escapeHtml(d.sku || 'N/A')}</span><span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">BC: ${escapeHtml(d.barcode || 'N/A')}</span><span class="text-[11px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">SL: ${escapeHtml(d.quantity || 1)}</span></div></div></div><div class="mt-3"><div class="text-xs text-slate-400">Mô tả lỗi</div><div class="font-medium text-sm text-slate-700">${escapeHtml(d.defect_type || 'Lỗi chưa xác định')}</div></div>${d.resolution_note ? `<div class="mt-2 text-xs bg-green-50 text-green-700 rounded-xl p-2"><b>Kết quả:</b> ${escapeHtml(d.resolution_note)}</div>` : ''}<div class="mt-3 flex items-center justify-between gap-2"><div><span class="text-xs rounded-full border px-3 py-1 font-bold ${getStatusClass(d.status)}">${getStatusText(d.status)}</span><div class="text-[10px] text-slate-500 mt-2">${duration === null ? 'Chưa có thời gian thực tế' : escapeHtml(formatDashboardDuration(duration))}</div></div>${isAdmin() ? `<button data-id="${id}" onclick="event.stopPropagation(); deleteHistoryItem(this.dataset.id)" class="text-red-500 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl"><i class="fas fa-trash"></i></button>` : ''}</div></div>`;
+    }).join('');
+}
+
+function renderCatalog() {
+    let rows = getSearchFilteredRows('catalog');
+    rows = applyTableFilters(rows, 'catalog');
+    rows = applyTableSort([...rows], 'catalog');
+    updateSortIndicators('catalog');
+    updateFilterIndicators('catalog');
+
+    catalogList.innerHTML = rows.map(c => {
+        const id = escapeHtmlAttr(c.id);
+        return `<tr class="hover:bg-slate-50 transition-colors"><td class="px-6 py-4 font-mono text-blue-600 text-sm font-bold">${escapeHtml(c.barcode || '-')}</td><td class="px-6 py-4 font-medium">${escapeHtml(c.product_name || '-')}</td><td class="px-6 py-4 font-mono text-xs">${escapeHtml(c.sku || '-')}</td><td class="px-6 py-4 text-sm text-slate-700">${escapeHtml(c.vendor_name || '-')}</td><td class="px-6 py-4 text-sm font-mono text-slate-600">${escapeHtml(c.vendor_id || '-')}</td><td class="px-6 py-4 text-right"><button data-id="${id}" onclick="event.stopPropagation(); deleteItem('catalog', this.dataset.id)" class="text-red-500 bg-red-50 px-3 py-2 rounded-xl"><i class="fas fa-trash"></i></button></td></tr>`;
+    }).join('');
+
+    catalogMobileList.innerHTML = rows.map(c => {
+        const id = escapeHtmlAttr(c.id);
+        return `<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><div class="flex items-start justify-between gap-3"><div class="min-w-0 flex-1"><div class="font-bold text-slate-800 text-base leading-snug">${escapeHtml(c.product_name || 'N/A')}</div><div class="flex flex-wrap gap-1 mt-2"><span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-mono">BC: ${escapeHtml(c.barcode || '-')}</span><span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">ITEM: ${escapeHtml(c.sku || '-')}</span></div></div>${isAdmin() ? `<button data-id="${id}" onclick="event.stopPropagation(); deleteItem('catalog', this.dataset.id)" class="text-red-500 bg-red-50 px-3 py-2 rounded-xl shrink-0"><i class="fas fa-trash"></i></button>` : ''}</div><div class="mt-3 grid grid-cols-2 gap-2 text-xs"><div class="bg-slate-50 rounded-xl p-2"><div class="text-slate-400">Tên NCC</div><div class="font-semibold text-slate-700 truncate">${escapeHtml(c.vendor_name || '-')}</div></div><div class="bg-slate-50 rounded-xl p-2"><div class="text-slate-400">Mã NCC</div><div class="font-mono font-semibold text-slate-700 truncate">${escapeHtml(c.vendor_id || '-')}</div></div></div></div>`;
+    }).join('');
+}
+
+function renderActivityLogs() {
+    const list = document.getElementById('logs-list');
+    const mobileList = document.getElementById('logs-mobile-list');
+    if (!list || !mobileList) return;
+    if (!isAdmin()) { list.innerHTML = ''; mobileList.innerHTML = ''; return; }
+    const rows = getFilteredActivityLogs();
+    if (!rows.length) {
+        list.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-400">Chưa có nhật ký hoặc chưa tạo bảng activity_logs</td></tr>';
+        mobileList.innerHTML = '<div class="bg-white border border-slate-200 rounded-2xl p-6 text-center text-slate-400 text-sm">Chưa có nhật ký hoặc chưa tạo bảng activity_logs</div>';
+        return;
+    }
+    list.innerHTML = rows.map(log => `<tr class="hover:bg-slate-50"><td class="px-6 py-4 whitespace-nowrap text-xs font-medium text-slate-600">${escapeHtml(formatDateTime(log.created_at))}</td><td class="px-6 py-4"><div class="font-semibold text-slate-800">${escapeHtml(log.actor_name || '-')}</div><div class="text-xs text-slate-400 font-mono">${escapeHtml(log.actor_username || '-')}</div><div class="text-[10px] text-blue-600 font-bold uppercase">${escapeHtml(log.actor_role || '-')}</div></td><td class="px-6 py-4"><span class="inline-flex items-center rounded-lg border px-3 py-1 text-xs font-bold ${getLogActionClass(log.action)}">${escapeHtml(getLogActionText(log.action))}</span></td><td class="px-6 py-4 text-sm font-mono text-slate-600">${escapeHtml(log.target_type || '-')}</td><td class="px-6 py-4 text-sm text-slate-700">${escapeHtml(log.description || '-')}</td><td class="px-6 py-4 text-xs text-slate-500 max-w-[320px] break-words">${escapeHtml(formatLogDetails(log.details || {}))}</td></tr>`).join('');
+    mobileList.innerHTML = rows.map(log => `<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><div class="flex items-start justify-between gap-2"><div><div class="font-bold text-slate-800">${escapeHtml(log.actor_name || '-')}</div><div class="text-xs text-slate-400 font-mono">${escapeHtml(log.actor_username || '-')}</div></div><span class="rounded-lg border px-2 py-1 text-[11px] font-bold ${getLogActionClass(log.action)}">${escapeHtml(getLogActionText(log.action))}</span></div><div class="mt-2 text-xs text-slate-500">${escapeHtml(formatDateTime(log.created_at))}</div><div class="mt-3 text-sm font-semibold text-slate-700">${escapeHtml(log.description || '-')}</div><div class="mt-2 text-xs text-slate-500 break-words">${escapeHtml(formatLogDetails(log.details || {}))}</div></div>`).join('');
+}
+
+function renderUsers() {
+    const query = (usersSearch?.value || '').toLowerCase().trim();
+    let rows = appUsers.filter(u => `${u.username || ''} ${u.full_name || ''} ${u.role || ''} ${u.active ? 'hoạt động active' : 'đã khóa inactive'}`.toLowerCase().includes(query));
+    rows = applyTableSort(rows, 'users');
+    updateSortIndicators('users');
+    usersList.innerHTML = rows.map(u => {
+        const id = escapeHtmlAttr(u.id);
+        const roleClass = u.role === 'admin' ? 'bg-red-100 text-red-700' : u.role === 'po' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700';
+        return `<tr class="hover:bg-slate-50"><td class="px-6 py-4 font-semibold">${escapeHtml(u.username || '-')}</td><td class="px-6 py-4">${escapeHtml(u.full_name || '-')}</td><td class="px-6 py-4"><span class="px-2 py-1 rounded-full text-xs font-bold ${roleClass}">${escapeHtml(u.role || 'staff')}</span></td><td class="px-6 py-4"><span class="px-2 py-1 rounded-full text-xs font-bold ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${u.active ? 'Hoạt động' : 'Đã khóa'}</span></td><td class="px-6 py-4 text-sm text-slate-500">${escapeHtml(formatDateTime(u.created_at))}</td><td class="px-6 py-4 text-right"><div class="flex justify-end gap-2"><button data-id="${id}" data-active="${u.active ? 'true' : 'false'}" onclick="toggleUserStatus(this.dataset.id, this.dataset.active === 'true')" class="px-3 py-1 rounded-lg text-sm ${u.active ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">${u.active ? 'Khóa' : 'Mở'}</button><button data-id="${id}" onclick="openEditUserModal(this.dataset.id)" class="px-3 py-1 rounded-lg bg-blue-100 text-blue-700 text-sm">Sửa</button><button data-id="${id}" onclick="deleteUser(this.dataset.id)" class="px-3 py-1 rounded-lg bg-red-100 text-red-700 text-sm">Xóa</button></div></td></tr>`;
+    }).join('');
+    usersMobileList.innerHTML = rows.map(u => {
+        const id = escapeHtmlAttr(u.id);
+        const roleClass = u.role === 'admin' ? 'bg-red-100 text-red-700' : u.role === 'po' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700';
+        return `<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><div class="flex items-start justify-between gap-3"><div><div class="font-bold text-slate-800 text-lg">${escapeHtml(u.full_name || '-')}</div><div class="text-sm text-slate-500 mt-1">@${escapeHtml(u.username || '-')}</div></div><span class="px-2 py-1 rounded-full text-xs font-bold ${roleClass}">${escapeHtml(u.role || 'staff')}</span></div><div class="mt-3 grid grid-cols-2 gap-2 text-xs"><div class="bg-slate-50 rounded-xl p-2"><div class="text-slate-400">Trạng thái</div><div class="font-bold ${u.active ? 'text-green-600' : 'text-red-600'}">${u.active ? 'Hoạt động' : 'Đã khóa'}</div></div><div class="bg-slate-50 rounded-xl p-2"><div class="text-slate-400">Ngày tạo</div><div class="font-semibold text-slate-700">${escapeHtml(formatDateTime(u.created_at))}</div></div></div><div class="mt-4 grid grid-cols-3 gap-2"><button data-id="${id}" onclick="openEditUserModal(this.dataset.id)" class="py-2 rounded-xl bg-blue-50 text-blue-700 font-bold text-sm">Sửa</button><button data-id="${id}" data-active="${u.active ? 'true' : 'false'}" onclick="toggleUserStatus(this.dataset.id, this.dataset.active === 'true')" class="py-2 rounded-xl font-bold text-sm ${u.active ? 'bg-yellow-50 text-yellow-700' : 'bg-green-50 text-green-700'}">${u.active ? 'Khóa' : 'Mở'}</button><button data-id="${id}" onclick="deleteUser(this.dataset.id)" class="py-2 rounded-xl bg-red-50 text-red-700 font-bold text-sm">Xóa</button></div></div>`;
+    }).join('');
+}
+
+function populateAssigneeOptions() {
+    const datalist = document.getElementById('status-assignee-options');
+    if (!datalist) return;
+    datalist.replaceChildren();
+    const names = [...new Set(appUsers.filter(user => user.active !== false).map(user => String(user.full_name || user.username || '').trim()).filter(Boolean))];
+    names.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        datalist.appendChild(option);
+    });
+}
+
+function openStatusModal(id) {
+    const defect = defectsData.find(d => String(d.id) === String(id));
+    if (!defect) return;
+    document.getElementById('status-defect-id').value = defect.id;
+    document.getElementById('status-product-name').textContent = defect.product_name || 'N/A';
+    document.getElementById('status-sku').textContent = defect.sku || '-';
+    document.getElementById('status-barcode').textContent = defect.barcode || '-';
+    document.getElementById('status-created-at').textContent = formatDateTime(defect.created_at);
+    document.getElementById('status-fixing-at').textContent = defect.fixing_at ? formatDateTime(defect.fixing_at) : 'Chưa bắt đầu';
+    document.getElementById('status-resolved-at').textContent = defect.resolved_at ? formatDateTime(defect.resolved_at) : 'Chưa hoàn thành';
+    const duration = getResolutionDurationMs(defect);
+    document.getElementById('status-processing-time').textContent = duration === null ? 'Chưa có dữ liệu' : formatDashboardDuration(duration);
+    document.getElementById('status-assigned-to').value = defect.assigned_to || '';
+    document.getElementById('status-due-at').value = dateTimeToInputValue(defect.due_at);
+    document.getElementById('status-resolution-note').value = defect.resolution_note || '';
+    populateAssigneeOptions();
+    const schemaReady = ['updated_at', 'fixing_at', 'resolved_at', 'assigned_to', 'due_at', 'resolution_note'].some(key => Object.prototype.hasOwnProperty.call(defect, key));
+    document.getElementById('workflow-schema-warning')?.classList.toggle('hidden', schemaReady);
+    toggleModal('modal-status', true);
+}
+
+function isWorkflowSchemaError(error) {
+    const text = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+    return ['updated_at', 'fixing_at', 'resolved_at', 'assigned_to', 'due_at', 'resolution_note'].some(column => text.includes(column)) || text.includes('pgrst204') || text.includes('42703');
+}
+
+async function saveStatus(status) {
+    const id = document.getElementById('status-defect-id')?.value;
+    if (!id) return;
+    const currentDefect = defectsData.find(d => String(d.id) === String(id)) || {};
+    const now = new Date().toISOString();
+    const assignedTo = cleanTextValue(document.getElementById('status-assigned-to')?.value);
+    const dueLocal = document.getElementById('status-due-at')?.value || '';
+    const resolutionNote = cleanTextValue(document.getElementById('status-resolution-note')?.value);
+
+    const workflowPayload = {
+        status,
+        updated_at: now,
+        assigned_to: assignedTo || null,
+        due_at: dueLocal ? new Date(dueLocal).toISOString() : null,
+        resolution_note: resolutionNote || null
+    };
+
+    if (status === 'Pending') {
+        workflowPayload.fixing_at = null;
+        workflowPayload.resolved_at = null;
+    } else if (status === 'Fixing') {
+        workflowPayload.fixing_at = currentDefect.status === 'Fixing' && currentDefect.fixing_at ? currentDefect.fixing_at : now;
+        workflowPayload.resolved_at = null;
+        if (!workflowPayload.assigned_to) workflowPayload.assigned_to = currentDisplayName || null;
+    } else if (status === 'Resolved') {
+        workflowPayload.fixing_at = currentDefect.fixing_at || null;
+        workflowPayload.resolved_at = currentDefect.status === 'Resolved' && currentDefect.resolved_at ? currentDefect.resolved_at : now;
+        if (!workflowPayload.assigned_to) workflowPayload.assigned_to = currentDisplayName || null;
+    }
+
+    showAppLoading('Đang cập nhật xử lý...', 'Đang lưu trạng thái và thời gian thực tế');
+    let updatedDefect = null;
+    let usedWorkflowFallback = false;
+    try {
+        let result = await supabaseClient.from('defects').update(workflowPayload).eq('id', id).select().single();
+        if (result.error && isWorkflowSchemaError(result.error)) {
+            usedWorkflowFallback = true;
+            result = await supabaseClient.from('defects').update({ status }).eq('id', id).select().single();
+        }
+        if (result.error) throw result.error;
+        updatedDefect = result.data;
+
+        await createActivityLog('update', 'defects', id, `Cập nhật xử lý hàng lỗi: ${updatedDefect?.product_name || currentDefect.product_name || '-'}`, {
+            old_status: currentDefect.status,
+            new_status: status,
+            sku: updatedDefect?.sku || currentDefect.sku,
+            barcode: updatedDefect?.barcode || currentDefect.barcode,
+            assigned_to: workflowPayload.assigned_to,
+            due_at: workflowPayload.due_at,
+            resolution_note: workflowPayload.resolution_note
+        });
+
+        if (currentDefect.status !== status) {
+            const notificationType = status === 'Fixing' ? 'defect_fixing' : status === 'Resolved' ? 'defect_resolved' : 'defect_status_updated';
+            await createNotification(notificationType, updatedDefect || currentDefect, { status });
+        }
+
+        window.showToast(usedWorkflowFallback
+            ? `Đã cập nhật trạng thái. Chạy SUPABASE_UPGRADE_V2.sql để lưu thời gian và người phụ trách.`
+            : `Đã cập nhật: ${getStatusText(status)}`, usedWorkflowFallback ? 'warning' : 'success', { duration: usedWorkflowFallback ? 6500 : 3800 });
+        toggleModal('modal-status', false);
+        await fetchDefects();
+    } catch (error) {
+        window.showToast(`Lỗi cập nhật xử lý: ${error.message}`, 'error');
+    } finally {
+        hideAppLoading(true);
+    }
+}
+
+function exportDefectsToExcel() {
+    const visibleRows = getVisibleRowsForExport('dashboard');
+    if (!visibleRows.length) { window.showToast('Không có dữ liệu phù hợp với bộ lọc hiện tại để xuất!'); return; }
+    const dataToExport = visibleRows.map(d => ({
+        'Thời gian tiếp nhận': d.created_at ? new Date(d.created_at).toLocaleString('vi-VN') : '',
+        'Bắt đầu sửa': d.fixing_at ? new Date(d.fixing_at).toLocaleString('vi-VN') : '',
+        'Hoàn thành': d.resolved_at ? new Date(d.resolved_at).toLocaleString('vi-VN') : '',
+        'Thời gian hoàn tất': getResolutionDurationMs(d) === null ? '' : formatDashboardDuration(getResolutionDurationMs(d)),
+        'Người phụ trách': d.assigned_to || '',
+        'Hạn xử lý': d.due_at ? new Date(d.due_at).toLocaleString('vi-VN') : '',
+        'Barcode': d.barcode || '', 'Tên sản phẩm': d.product_name || '', 'Số lượng': d.quantity || 1,
+        'Item': d.sku || '', 'Mã NCC': d.vendor_id || '', 'Tên NCC': d.vendor_name || '',
+        'Loại lỗi': d.defect_type || '', 'Mức độ': d.severity || '', 'Trạng thái': getStatusText(d.status),
+        'Ghi chú kết quả': d.resolution_note || '', 'Link hình ảnh': getSafeGalleryUrls(getDefectImageUrls(d)).join('\n')
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Danh sách hàng lỗi');
+    worksheet['!cols'] = Object.keys(dataToExport[0]).map(key => ({ wch: Math.min(45, Math.max(14, key.length + 4)) }));
+    XLSX.writeFile(workbook, `Bao_Cao_Loi_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+function exportHistoryToExcel() {
+    const rows = getVisibleRowsForExport('history');
+    if (!rows.length) { window.showToast('Không có dữ liệu lịch sử phù hợp với bộ lọc hiện tại để xuất!'); return; }
+    const data = rows.map(d => ({
+        'Thời gian tiếp nhận': d.created_at ? new Date(d.created_at).toLocaleString('vi-VN') : '',
+        'Bắt đầu sửa': d.fixing_at ? new Date(d.fixing_at).toLocaleString('vi-VN') : '',
+        'Hoàn thành': d.resolved_at ? new Date(d.resolved_at).toLocaleString('vi-VN') : '',
+        'Thời gian hoàn tất': getResolutionDurationMs(d) === null ? '' : formatDashboardDuration(getResolutionDurationMs(d)),
+        'Người phụ trách': d.assigned_to || '', 'Hạn xử lý': d.due_at ? new Date(d.due_at).toLocaleString('vi-VN') : '',
+        'Barcode': d.barcode || '', 'Tên sản phẩm': d.product_name || '', 'Số lượng': d.quantity || 1,
+        'Item': d.sku || '', 'Mã NCC': d.vendor_id || '', 'Tên NCC': d.vendor_name || '', 'Loại lỗi': d.defect_type || '',
+        'Mức độ': d.severity || '', 'Trạng thái': 'Xong', 'Ghi chú kết quả': d.resolution_note || '',
+        'Link hình ảnh': getSafeGalleryUrls(getDefectImageUrls(d)).join('\n')
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Lịch sử hàng lỗi');
+    XLSX.writeFile(workbook, `Lich_Su_Hang_Loi_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+// Mở app lần đầu: khôi phục lựa chọn dashboard và đảm bảo lọc nhanh được lưu.
+document.addEventListener('DOMContentLoaded', () => {
+    restoreDashboardSettings();
+});
