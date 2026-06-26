@@ -1,7 +1,0 @@
-v3.17.0
-- Sửa menu PC không ẩn tab theo quyền do CSS display:flex ghi đè class hidden.
-- Đồng bộ danh sách tab PC với mobile.
-- Nhân viên: Hàng lỗi, Lịch sử, Tài khoản.
-- PO: Hàng lỗi, Lịch sử, Danh mục hàng hóa, Tài khoản.
-- Admin: Dashboard, Hàng lỗi, Lịch sử, Danh mục hàng hóa, Quản lý tài khoản, Nhật ký.
-- Nhân viên/PO mở Tài khoản trên PC chỉ thấy thông tin cá nhân và đổi mật khẩu; không tải danh sách tài khoản.
