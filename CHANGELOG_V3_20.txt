@@ -1,6 +1,0 @@
-v3.20.0
-- Ẩn tab Tài khoản trên giao diện PC đối với quyền PO và nhân viên/user.
-- Trên PC chỉ admin thấy mục Quản lý tài khoản.
-- Mobile vẫn giữ tab Tài khoản cá nhân cho PO và nhân viên.
-- Chặn mở thủ công tab Tài khoản trên PC với tài khoản không phải admin.
-- Khi đổi từ mobile sang PC trong lúc đang mở Tài khoản, tự chuyển về Hàng lỗi.
