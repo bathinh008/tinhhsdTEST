@@ -13,7 +13,7 @@
     <!-- Barcode Detector polyfill sẽ được nạp động bằng import() khi cần quét -->
     <!-- Supabase JS Client -->
     <script defer src="./vendor/supabase.umd.js?v=3.14.0"></script>
-    <link rel="stylesheet" href="./style.css?v=3.26.0">
+    <link rel="stylesheet" href="./style.css?v=3.33.7">
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen pb-20 md:pb-0">
 
@@ -69,10 +69,14 @@
                     title="Mở menu" aria-label="Mở menu">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
-                <div class="p-2 bg-blue-600 rounded-lg shrink-0">
-                    <i class="fas fa-box text-white text-xl"></i>
-                </div>
-                <h1 class="text-lg md:text-xl font-bold tracking-tight truncate">Quản lý hàng lỗi</h1>
+                <button id="header-brand-home" type="button" onclick="handleHeaderBrandClick()"
+                    class="header-brand-home flex items-center gap-3 min-w-0"
+                    title="Về Dashboard" aria-label="Về Dashboard">
+                    <span class="p-2 bg-blue-600 rounded-lg shrink-0">
+                        <i class="fas fa-box text-white text-xl"></i>
+                    </span>
+                    <span class="text-lg md:text-xl font-bold tracking-tight truncate">Quản lý hàng lỗi</span>
+                </button>
                 <div id="connection-status" class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full flex items-center gap-2 shrink-0">
                     <span id="status-dot" class="w-2 h-2 rounded-full bg-yellow-400"></span>
                     <span id="status-text">Đang kết nối Supabase...</span>
@@ -324,7 +328,8 @@
                         <div id="dashboard-status-donut" class="dashboard-donut">
                             <div class="dashboard-donut-center">
                                 <strong id="dashboard-donut-rate">0%</strong>
-                                <span>Hoàn thành</span>
+                                <span>Tỷ lệ hoàn thành</span>
+                                <small id="dashboard-donut-total">0 báo cáo</small>
                             </div>
                         </div>
                         <div id="dashboard-status-legend" class="dashboard-status-legend"></div>
@@ -1283,8 +1288,8 @@
 
 	</nav>
 
-    <script defer src="./supabase.js?v=3.26.0"></script>
-    <script defer src="./app.js?v=3.26.0"></script>
-    <script defer src="./mobile.js?v=3.26.0"></script>
+    <script defer src="./supabase.js?v=3.33.7"></script>
+    <script defer src="./app.js?v=3.33.7"></script>
+    <script defer src="./mobile.js?v=3.33.7"></script>
 </body>
 </html>

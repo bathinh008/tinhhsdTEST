@@ -1979,6 +1979,53 @@ let defectsData = [];
             if (element) element.textContent = value;
         }
 
+        function setDashboardCounter(id, value, { suffix = '', animate = false, delay = 0, duration = 760 } = {}) {
+            const element = document.getElementById(id);
+            if (!element) return;
+
+            const numericValue = Number(value) || 0;
+            const finalText = `${numericValue.toLocaleString('vi-VN')}${suffix}`;
+
+            if (element.__dashboardCounterTimer) {
+                clearTimeout(element.__dashboardCounterTimer);
+                element.__dashboardCounterTimer = null;
+            }
+            if (element.__dashboardCounterFrame) {
+                cancelAnimationFrame(element.__dashboardCounterFrame);
+                element.__dashboardCounterFrame = null;
+            }
+
+            const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+            if (!animate || reduceMotion) {
+                element.textContent = finalText;
+                return;
+            }
+
+            element.textContent = `0${suffix}`;
+            const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+            const startAnimation = () => {
+                const startedAt = performance.now();
+                const step = (now) => {
+                    const progress = Math.min(1, (now - startedAt) / duration);
+                    const currentValue = Math.round(numericValue * easeOutCubic(progress));
+                    element.textContent = `${currentValue.toLocaleString('vi-VN')}${suffix}`;
+                    if (progress < 1) {
+                        element.__dashboardCounterFrame = requestAnimationFrame(step);
+                    } else {
+                        element.textContent = finalText;
+                        element.__dashboardCounterFrame = null;
+                    }
+                };
+                element.__dashboardCounterFrame = requestAnimationFrame(step);
+            };
+
+            if (delay > 0) {
+                element.__dashboardCounterTimer = setTimeout(startAnimation, delay);
+            } else {
+                startAnimation();
+            }
+        }
+
         function getDashboardTrendBuckets(rows, config) {
             const effectiveDays = config.value === 'all' ? 365 : config.days;
             const count = config.bucketCount;
@@ -2825,9 +2872,15 @@ let defectsData = [];
             }
         });
 
+        window.handleHeaderBrandClick = () => {
+            if (!window.matchMedia('(min-width: 769px)').matches) return;
+            window.switchTab('dashboard');
+        };
+
         window.switchTab = (tab, options = {}) => {
 
             const silent = !!options.silent;
+            const previousTab = typeof getActiveAppTab === 'function' ? getActiveAppTab() : '';
 
 			const toggleHidden = (id, hidden) => {
 				const el = document.getElementById(id);
@@ -2864,6 +2917,10 @@ let defectsData = [];
 				if (!silent) window.showToast("Chỉ admin mới được xem nhật ký hoạt động.");
 				tab = getDefaultLandingTab();
 			}
+
+            if (tab === 'dashboard' && previousTab !== 'dashboard') {
+                dashboardAnimationPending = true;
+            }
 
             document.body.classList.remove('active-tab-dashboard', 'active-tab-defects', 'active-tab-history', 'active-tab-catalog', 'active-tab-users', 'active-tab-logs');
             document.body.classList.add('active-tab-' + tab);
@@ -4788,7 +4845,10 @@ function handleDashboardPeriodChange() {
     const value = document.getElementById('dashboard-period')?.value || '30';
     setDashboardStoredValue('period', value);
     updateDashboardCustomRangeVisibility();
-    if (value !== 'custom') renderDashboardAnalytics();
+    if (value !== 'custom') {
+        dashboardAnimationPending = true;
+        renderDashboardAnalytics();
+    }
 }
 
 function applyDashboardCustomRange() {
@@ -4804,6 +4864,7 @@ function applyDashboardCustomRange() {
     }
     setDashboardStoredValue('date_from', from);
     setDashboardStoredValue('date_to', to);
+    dashboardAnimationPending = true;
     renderDashboardAnalytics();
 }
 
@@ -5010,6 +5071,101 @@ function getSearchFilteredRows(tableName) {
     return [];
 }
 
+
+let dashboardDonutAnimationFrame = null;
+let dashboardAnimationPending = true;
+
+function animateDashboardCharts({ pendingPercent = 0, resolvedPercent = 0, completionRate = 0 } = {}) {
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const dashboardIsVisible = getActiveAppTab() === 'dashboard' && document.visibilityState !== 'hidden';
+    const shouldAnimate = dashboardIsVisible && !reduceMotion && dashboardAnimationPending;
+    if (dashboardIsVisible) dashboardAnimationPending = false;
+
+    const bars = [...document.querySelectorAll('#dashboard-trend-bars .dashboard-bar')];
+    bars.forEach((bar, index) => {
+        const target = bar.dataset.targetHeight || '2%';
+        bar.style.transitionDelay = shouldAnimate ? `${index * 55}ms` : '0ms';
+        bar.style.height = shouldAnimate ? '0%' : target;
+        bar.classList.toggle('is-chart-ready', !shouldAnimate);
+    });
+
+    const progressBars = [...document.querySelectorAll('#dashboard-status-legend .dashboard-status-progress > span')];
+    progressBars.forEach((bar, index) => {
+        const target = bar.dataset.targetWidth || '0%';
+        bar.style.transitionDelay = shouldAnimate ? `${180 + index * 90}ms` : '0ms';
+        bar.style.width = shouldAnimate ? '0%' : target;
+    });
+
+    const cards = [...document.querySelectorAll('#dashboard-status-legend .dashboard-status-card')];
+    cards.forEach((card, index) => {
+        card.style.setProperty('--chart-card-delay', shouldAnimate ? `${180 + index * 90}ms` : '0ms');
+        card.classList.toggle('is-chart-entering', shouldAnimate);
+    });
+
+    const donut = document.getElementById('dashboard-status-donut');
+    const rateElement = document.getElementById('dashboard-donut-rate');
+    if (dashboardDonutAnimationFrame) {
+        cancelAnimationFrame(dashboardDonutAnimationFrame);
+        dashboardDonutAnimationFrame = null;
+    }
+
+    const setDonutFrame = (progress) => {
+        const easedPending = pendingPercent * progress;
+        const easedResolvedEnd = Math.min(100, (pendingPercent + resolvedPercent) * progress);
+        if (donut) {
+            donut.style.setProperty(
+                '--dashboard-donut-bg',
+                `conic-gradient(#f59e0b 0 ${easedPending}%, #22c55e ${easedPending}% ${easedResolvedEnd}%, #e2e8f0 ${easedResolvedEnd}% 100%)`
+            );
+        }
+        if (rateElement) {
+            rateElement.textContent = `${Math.round(completionRate * progress)}%`;
+        }
+    };
+
+    if (!shouldAnimate) {
+        setDonutFrame(1);
+        donut?.classList.add('is-chart-visible');
+        cards.forEach(card => card.classList.remove('is-chart-entering'));
+        return;
+    }
+
+    if (donut) {
+        donut.classList.remove('is-chart-visible');
+    }
+    setDonutFrame(0);
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            bars.forEach(bar => {
+                bar.style.height = bar.dataset.targetHeight || '2%';
+                bar.classList.add('is-chart-ready');
+            });
+            progressBars.forEach(bar => {
+                bar.style.width = bar.dataset.targetWidth || '0%';
+            });
+            donut?.classList.add('is-chart-visible');
+            cards.forEach(card => card.classList.remove('is-chart-entering'));
+        });
+    });
+
+    const duration = 920;
+    const start = performance.now();
+    const easeOutCubic = value => 1 - Math.pow(1 - value, 3);
+
+    const step = (now) => {
+        const rawProgress = Math.min(1, (now - start) / duration);
+        setDonutFrame(easeOutCubic(rawProgress));
+        if (rawProgress < 1) {
+            dashboardDonutAnimationFrame = requestAnimationFrame(step);
+        } else {
+            dashboardDonutAnimationFrame = null;
+            setDonutFrame(1);
+        }
+    };
+    dashboardDonutAnimationFrame = requestAnimationFrame(step);
+}
+
 function renderDashboardAnalytics() {
     restoreDashboardSettings();
     const periodSelect = document.getElementById('dashboard-period');
@@ -5024,14 +5180,19 @@ function renderDashboardAnalytics() {
     const resolvedRows = rows.filter(item => normalizeDefectStatus(item.status) === 'Resolved');
     const allPendingRows = defectsData.filter(item => normalizeDefectStatus(item.status) === 'Pending');
     const completionRate = dashboardPercent(resolvedRows.length, totalReports);
+    const shouldAnimateDashboardCounters = getActiveAppTab() === 'dashboard'
+        && document.visibilityState !== 'hidden'
+        && dashboardAnimationPending
+        && !(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
 
-    setDashboardText('stat-total', totalQuantity.toLocaleString('vi-VN'));
-    setDashboardText('stat-pending', sumDashboardQuantity(pendingRows).toLocaleString('vi-VN'));
-    setDashboardText('stat-resolved', sumDashboardQuantity(resolvedRows).toLocaleString('vi-VN'));
+    setDashboardCounter('stat-total', totalQuantity, { animate: shouldAnimateDashboardCounters, delay: 0 });
+    setDashboardCounter('stat-pending', sumDashboardQuantity(pendingRows), { animate: shouldAnimateDashboardCounters, delay: 70 });
+    setDashboardCounter('stat-resolved', sumDashboardQuantity(resolvedRows), { animate: shouldAnimateDashboardCounters, delay: 140 });
     setDashboardText('dashboard-total-reports', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
     setDashboardText('dashboard-pending-share', `${pendingRows.length.toLocaleString('vi-VN')} báo cáo · ${dashboardPercent(pendingRows.length, totalReports)}%`);
     setDashboardText('dashboard-completion-rate', `${resolvedRows.length.toLocaleString('vi-VN')} báo cáo · ${completionRate}%`);
     setDashboardText('dashboard-donut-rate', `${completionRate}%`);
+    setDashboardText('dashboard-donut-total', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
     setDashboardText('dashboard-trend-total', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
 
     const caption = document.getElementById('dashboard-period-caption');
@@ -5046,13 +5207,13 @@ function renderDashboardAnalytics() {
         return normalizeDefectStatus(item.status) === 'Resolved' && date?.toDateString() === todayKey;
     });
     setDashboardText('dashboard-today-count', `Hôm nay: ${resolvedToday.length} hoàn thành`);
-    setDashboardText('dashboard-created-today', `${createdToday.length} báo cáo`);
-    setDashboardText('dashboard-resolved-today', `${resolvedToday.length} báo cáo`);
+    setDashboardCounter('dashboard-created-today', createdToday.length, { suffix: ' báo cáo', animate: shouldAnimateDashboardCounters, delay: 210 });
+    setDashboardCounter('dashboard-resolved-today', resolvedToday.length, { suffix: ' báo cáo', animate: shouldAnimateDashboardCounters, delay: 280 });
 
     const durations = resolvedRows.map(getResolutionDurationMs).filter(value => value !== null);
     const avgDuration = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null;
     setDashboardText('dashboard-avg-resolution', avgDuration === null ? 'Chưa có dữ liệu' : formatDashboardDuration(avgDuration));
-    setDashboardText('dashboard-open-over7', `${allPendingRows.filter(item => getDefectAgeDays(item) >= 7).length} mục`);
+    setDashboardCounter('dashboard-open-over7', allPendingRows.filter(item => getDefectAgeDays(item) >= 7).length, { suffix: ' mục', animate: shouldAnimateDashboardCounters, delay: 350 });
 
     const trendElement = document.getElementById('dashboard-total-trend');
     if (trendElement) {
@@ -5092,7 +5253,7 @@ function renderDashboardAnalytics() {
         trendContainer.innerHTML = buckets.map(bucket => {
             const height = bucket.count ? Math.max(7, Math.round((bucket.count / maxCount) * 100)) : 2;
             return `<div class="dashboard-bar-item" title="${bucket.count} báo cáo, số lượng ${bucket.quantity}">
-                <div class="dashboard-bar-track"><div class="dashboard-bar" style="height:${height}%"><span class="dashboard-bar-value">${bucket.count}</span></div></div>
+                <div class="dashboard-bar-track"><div class="dashboard-bar" data-target-height="${height}%" style="height:0%"><span class="dashboard-bar-value">${bucket.count}</span></div></div>
                 <span class="dashboard-bar-label">${escapeHtml(bucket.label)}</span>
             </div>`;
         }).join('');
@@ -5101,26 +5262,39 @@ function renderDashboardAnalytics() {
     const pendingPercent = dashboardPercent(pendingRows.length, totalReports);
     const resolvedPercent = dashboardPercent(resolvedRows.length, totalReports);
     const donut = document.getElementById('dashboard-status-donut');
-    if (donut) {
-        const pendingEnd = pendingPercent;
-        const resolvedEnd = Math.min(100, pendingEnd + resolvedPercent);
-        donut.style.setProperty('--dashboard-donut-bg', totalReports
-            ? `conic-gradient(#f59e0b 0 ${pendingEnd}%, #22c55e ${pendingEnd}% ${resolvedEnd}%, #e2e8f0 ${resolvedEnd}% 100%)`
-            : 'conic-gradient(#e2e8f0 0 100%)');
+    if (donut && !totalReports) {
+        donut.style.setProperty('--dashboard-donut-bg', 'conic-gradient(#e2e8f0 0 100%)');
     }
 
     const legend = document.getElementById('dashboard-status-legend');
     if (legend) {
         const legendRows = [
-            { label: 'Chờ xử lý', rows: pendingRows, color: '#f59e0b' },
-            { label: 'Hoàn thành', rows: resolvedRows, color: '#22c55e' }
+            { label: 'Chờ xử lý', rows: pendingRows, color: '#f59e0b', percent: pendingPercent, icon: 'fa-hourglass-half', type: 'pending' },
+            { label: 'Hoàn thành', rows: resolvedRows, color: '#22c55e', percent: resolvedPercent, icon: 'fa-circle-check', type: 'resolved' }
         ];
-        legend.innerHTML = legendRows.map(item => `<div class="dashboard-legend-row">
-            <span class="dashboard-legend-dot" style="background:${item.color}"></span>
-            <span>${item.label}</span>
-            <strong>${item.rows.length} BC · SL ${sumDashboardQuantity(item.rows)}</strong>
-        </div>`).join('');
+        legend.innerHTML = legendRows.map(item => {
+            const quantity = sumDashboardQuantity(item.rows).toLocaleString('vi-VN');
+            const reports = item.rows.length.toLocaleString('vi-VN');
+            const progressWidth = item.rows.length ? Math.max(8, item.percent) : 0;
+            return `<div class="dashboard-status-card is-${item.type}">
+                <div class="dashboard-status-card-head">
+                    <div class="dashboard-status-card-label">
+                        <span class="dashboard-status-icon" style="color:${item.color}; background:${item.type === 'pending' ? '#fff7ed' : '#f0fdf4'}"><i class="fas ${item.icon}"></i></span>
+                        <span>${item.label}</span>
+                    </div>
+                    <span class="dashboard-status-card-percent">${item.percent}%</span>
+                </div>
+                <div class="dashboard-status-summary">
+                    <span><strong>${reports}</strong> báo cáo</span>
+                    <span class="dashboard-status-separator">•</span>
+                    <span>SL <strong>${quantity}</strong></span>
+                </div>
+                <div class="dashboard-status-progress"><span data-target-width="${progressWidth}%" style="width:0%; background:${item.color}"></span></div>
+            </div>`;
+        }).join('');
     }
+
+    animateDashboardCharts({ pendingPercent, resolvedPercent, completionRate });
 
     const vendors = new Map();
     rows.forEach(item => {
