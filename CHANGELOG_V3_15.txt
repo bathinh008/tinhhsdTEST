@@ -1,4 +1,0 @@
-v3.15.0
-- Cân bằng chiều cao hai KPI Chờ xử lý và Đã hoàn thành trên mobile.
-- Cố định vùng tiêu đề để số liệu nằm cùng một hàng ngang dù tiêu đề xuống dòng.
-- Căn phần báo cáo và ghi chú ở cùng vị trí phía dưới hai thẻ.
