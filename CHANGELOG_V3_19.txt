@@ -1,0 +1,5 @@
+v3.19.0
+- Ẩn hoàn toàn thanh tab/HUD mobile khi chưa đăng nhập.
+- Thanh tab chỉ được mở sau khi phiên đăng nhập hoặc phiên khôi phục hợp lệ.
+- Khi đăng xuất hoặc phiên hết hạn, HUD tự ẩn và bỏ khoảng trống dưới màn hình.
+- Khóa bằng cả HTML, CSS và JavaScript để tránh mobile.js ép hiện lại.

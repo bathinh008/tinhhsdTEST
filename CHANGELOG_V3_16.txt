@@ -1,0 +1,5 @@
+v3.16.0
+- Dashboard chỉ hiển thị và cho phép truy cập với tài khoản admin.
+- Nhân viên và PO đăng nhập sẽ vào thẳng tab Hàng lỗi.
+- Ẩn Dashboard khỏi menu PC, menu bên, thanh tab mobile và thao tác vuốt.
+- Chặn truy cập Dashboard bằng gọi switchTab thủ công; tự chuyển về Hàng lỗi.

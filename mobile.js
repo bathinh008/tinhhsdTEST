@@ -11,16 +11,109 @@
         return window.matchMedia('(max-width: 768px)').matches;
     }
 
+    function isTextInputFocused() {
+        const el = document.activeElement;
+        return !!el && (
+            el.matches?.('input, textarea, select, [contenteditable="true"]')
+        );
+    }
+
+    function isLoginScreenVisible() {
+        const loginScreen = document.getElementById('login-screen');
+        return !loginScreen || !loginScreen.classList.contains('hidden');
+    }
+
+    function syncMobileAuthVisibility() {
+        const nav = document.getElementById('mobile-bottom-nav');
+        const authenticated = !isLoginScreenVisible();
+
+        document.body.classList.toggle('app-authenticated', authenticated);
+
+        if (!nav) return authenticated;
+
+        nav.classList.toggle('auth-nav-hidden', !authenticated);
+        nav.hidden = !authenticated;
+        nav.setAttribute('aria-hidden', authenticated ? 'false' : 'true');
+
+        if (!authenticated) {
+            nav.style.setProperty('display', 'none', 'important');
+            nav.style.setProperty('visibility', 'hidden', 'important');
+            nav.style.setProperty('opacity', '0', 'important');
+            nav.style.setProperty('pointer-events', 'none', 'important');
+            document.documentElement.style.removeProperty('--mobile-nav-measured-height');
+            document.documentElement.style.setProperty('--mobile-visual-bottom', '0px');
+            return false;
+        }
+
+        nav.style.removeProperty('display');
+        nav.style.removeProperty('visibility');
+        nav.style.removeProperty('opacity');
+        nav.style.removeProperty('pointer-events');
+        return true;
+    }
+
+    function syncMobileViewportMetrics() {
+        if (!isMobileViewport()) {
+            document.documentElement.style.removeProperty('--mobile-visual-bottom');
+            document.body.classList.remove('keyboard-open');
+            syncMobileAuthVisibility();
+            return;
+        }
+
+        if (!syncMobileAuthVisibility()) {
+            document.body.classList.remove('keyboard-open');
+            return;
+        }
+
+        const nav = document.getElementById('mobile-bottom-nav');
+        const viewport = window.visualViewport;
+        let visualBottom = 0;
+
+        if (viewport) {
+            const rawGap = window.innerHeight - viewport.height - viewport.offsetTop;
+            visualBottom = Math.max(0, Math.min(160, Math.round(rawGap)));
+        }
+
+        const keyboardLikelyOpen = isTextInputFocused() && viewport && viewport.height < window.innerHeight * 0.72;
+        document.body.classList.toggle('keyboard-open', !!keyboardLikelyOpen);
+
+        // Khi bàn phím không mở, đẩy HUD lên khỏi thanh công cụ dưới của trình duyệt.
+        document.documentElement.style.setProperty(
+            '--mobile-visual-bottom',
+            `${keyboardLikelyOpen ? 0 : visualBottom}px`
+        );
+
+        if (nav) {
+            nav.hidden = false;
+            nav.setAttribute('aria-hidden', 'false');
+            nav.classList.remove('auth-nav-hidden');
+            nav.style.removeProperty('display');
+            nav.style.removeProperty('visibility');
+            nav.style.removeProperty('opacity');
+            nav.style.removeProperty('transform');
+
+            requestAnimationFrame(() => {
+                const height = Math.ceil(nav.getBoundingClientRect().height || 82);
+                document.documentElement.style.setProperty('--mobile-nav-measured-height', `${height}px`);
+            });
+        }
+    }
+
     function safeCall(fn, fallback) {
         try { return fn(); } catch (e) { return fallback; }
     }
 
     window.getAllowedTabs = function getAllowedTabs() {
         const role = safeCall(() => currentRole, 'staff') || 'staff';
-        const tabs = ['dashboard', 'defects', 'history'];
+        const tabs = [];
+
+        // PC và Mobile dùng chung một cấu hình quyền tab.
+        if (role === 'admin') tabs.push('dashboard');
+        tabs.push('defects', 'history');
         if (role === 'admin' || role === 'po') tabs.push('catalog');
-        if (role === 'admin' || isMobileViewport()) tabs.push('users');
+        tabs.push('users');
         if (role === 'admin') tabs.push('logs');
+
         return tabs;
     };
 
@@ -33,18 +126,17 @@
 
     function getActiveTab() {
         const activeBodyClass = [...document.body.classList].find(cls => cls.startsWith('active-tab-'));
-        return activeBodyClass ? activeBodyClass.replace('active-tab-', '') : 'dashboard';
+        return activeBodyClass ? activeBodyClass.replace('active-tab-', '') : (window.getAllowedTabs()[0] || 'defects');
     }
 
     function updateMobileTabLayout() {
         const nav = document.getElementById('mobile-bottom-nav');
+        if (!nav) return;
+        if (!syncMobileAuthVisibility()) return;
+
         const allowed = window.getAllowedTabs();
         const allTabs = ['dashboard', 'defects', 'history', 'catalog', 'users', 'logs'];
-
-        if (nav) {
-            nav.style.setProperty('--mobile-tab-count', String(allowed.length));
-            nav.dataset.tabCount = String(allowed.length);
-        }
+        let visibleCount = 0;
 
         allTabs.forEach(tab => {
             const mobileBtn = document.getElementById(`m-tab-${tab}`);
@@ -52,11 +144,66 @@
             const topBtn = document.getElementById(`tab-${tab}`);
             const visible = allowed.includes(tab);
 
-            if (mobileBtn) mobileBtn.classList.toggle('mobile-tab-hidden', !visible);
-            if (sideBtn) sideBtn.classList.toggle('hidden', !visible);
-            if (topBtn) topBtn.classList.toggle('hidden', !visible && tab !== 'dashboard' && tab !== 'defects' && tab !== 'history');
+            if (mobileBtn) {
+                mobileBtn.classList.toggle('mobile-tab-hidden', !visible);
+                mobileBtn.classList.toggle('hidden', !visible);
+                mobileBtn.hidden = !visible;
+                mobileBtn.setAttribute('aria-hidden', visible ? 'false' : 'true');
+
+                // Ép đồng bộ display để không bị class quyền cũ giữ lại sau khi khôi phục phiên.
+                if (visible) {
+                    mobileBtn.style.removeProperty('display');
+                    mobileBtn.style.setProperty('display', 'flex', 'important');
+                    visibleCount += 1;
+                } else {
+                    mobileBtn.style.setProperty('display', 'none', 'important');
+                }
+            }
+
+            [sideBtn, topBtn].forEach(button => {
+                if (!button) return;
+                button.classList.toggle('hidden', !visible);
+                button.hidden = !visible;
+                if (!visible) button.style.setProperty('display', 'none', 'important');
+                else button.style.removeProperty('display');
+                button.setAttribute('aria-hidden', visible ? 'false' : 'true');
+            });
         });
+
+        // Dựa trên số nút thật sự đang hiển thị, tránh trường hợp grid 3 cột rồi mới đổi thành 4.
+        const count = Math.max(visibleCount, 1);
+        nav.style.setProperty('--mobile-tab-count', String(count));
+        nav.dataset.tabCount = String(count);
+        nav.classList.add('mobile-nav-ready');
+        syncMobileViewportMetrics();
     }
+
+    let mobileNavSyncQueued = false;
+    let mobileNavFollowupTimer = null;
+
+    function scheduleMobileTabLayoutSync() {
+        if (!isMobileViewport()) {
+            document.documentElement.style.removeProperty('--mobile-visual-bottom');
+            document.documentElement.style.removeProperty('--mobile-nav-measured-height');
+            document.body.classList.remove('keyboard-open');
+            syncMobileAuthVisibility();
+            return;
+        }
+        if (mobileNavSyncQueued) return;
+        mobileNavSyncQueued = true;
+        requestAnimationFrame(() => {
+            mobileNavSyncQueued = false;
+            syncMobileViewportMetrics();
+            updateMobileTabLayout();
+        });
+        clearTimeout(mobileNavFollowupTimer);
+        mobileNavFollowupTimer = setTimeout(() => {
+            syncMobileViewportMetrics();
+            updateMobileTabLayout();
+        }, 120);
+    }
+
+    window.refreshMobileNavigation = scheduleMobileTabLayoutSync;
 
     const originalSwitchTab = window.switchTab;
     if (typeof originalSwitchTab === 'function') {
@@ -64,12 +211,32 @@
             const allowed = window.getAllowedTabs();
             if (!allowed.includes(tab)) {
                 if (!options.silent) window.showToast(getBlockedTabMessage(tab));
-                tab = 'dashboard';
+                tab = safeCall(() => window.getDefaultLandingTab?.(), null) || allowed[0] || 'defects';
             }
 
             const result = originalSwitchTab.call(this, tab, options);
-            updateMobileTabLayout();
-            document.body.classList.remove('mobile-header-hidden');
+
+            // Tất cả tab dùng chung cửa sổ cuộn. Đưa tab vừa mở về đúng đầu trang
+            // để Dashboard không bị mở giữa nội dung hoặc lệch so với các tab khác.
+            const resetTabScroll = () => {
+                try {
+                    document.documentElement.scrollLeft = 0;
+                    document.body.scrollLeft = 0;
+                    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+                } catch (error) {
+                    window.scrollTo(0, 0);
+                }
+                syncMobileViewportMetrics();
+                updateMobileTabLayout();
+            };
+
+            if (!options.preserveScroll) {
+                resetTabScroll();
+                requestAnimationFrame(resetTabScroll);
+                setTimeout(resetTabScroll, 80);
+            } else {
+                updateMobileTabLayout();
+            }
             return result;
         };
     }
@@ -96,7 +263,8 @@
             el.setAttribute('tabindex', '0');
             el.title = 'Về tab Báo lỗi';
             const goHome = () => {
-                if (typeof window.switchTab === 'function') window.switchTab('dashboard', { silent: true });
+                const homeTab = safeCall(() => window.getDefaultLandingTab?.(), null) || window.getAllowedTabs()[0] || 'defects';
+                if (typeof window.switchTab === 'function') window.switchTab(homeTab, { silent: true });
                 if (typeof window.scrollToTop === 'function') window.scrollToTop();
             };
             el.addEventListener('click', goHome);
@@ -246,7 +414,7 @@
         if (tab === 'dashboard' || tab === 'defects' || tab === 'history') {
             if (typeof fetchDefects === 'function') await fetchDefects();
         } else if (tab === 'catalog') {
-            if (typeof fetchCatalog === 'function') await fetchCatalog();
+            if (typeof fetchCatalog === 'function') await fetchCatalog({ render: true });
         } else if (tab === 'users') {
             if (safeCall(() => currentRole === 'admin', false) && typeof fetchUsers === 'function') await fetchUsers();
             if (typeof updateMobilePersonalAccount === 'function') updateMobilePersonalAccount();
@@ -681,28 +849,151 @@
         };
     }
 
+
+    function setupAutoHideHeaderOnScroll() {
+        if (document.documentElement.dataset.mobileHeaderScrollReady === '1') return;
+        document.documentElement.dataset.mobileHeaderScrollReady = '1';
+
+        let lastScrollY = Math.max(0, window.scrollY || 0);
+        let scrollDirection = '';
+        let directionDistance = 0;
+        let framePending = false;
+
+        const showHeader = () => document.body.classList.remove('mobile-header-hidden');
+        const hideHeader = () => document.body.classList.add('mobile-header-hidden');
+
+        const shouldPause = () => {
+            if (!isMobileViewport()) return true;
+            if (!document.body.classList.contains('app-authenticated')) return true;
+            if (document.body.classList.contains('modal-open')) return true;
+            if (document.body.classList.contains('keyboard-open')) return true;
+            return false;
+        };
+
+        const updateHeaderVisibility = () => {
+            framePending = false;
+            const currentScrollY = Math.max(0, window.scrollY || document.documentElement.scrollTop || 0);
+
+            if (!isMobileViewport()) {
+                showHeader();
+                lastScrollY = currentScrollY;
+                scrollDirection = '';
+                directionDistance = 0;
+                return;
+            }
+
+            // Ở đầu trang luôn hiện header để người dùng không bị mất định hướng.
+            if (currentScrollY <= 16) {
+                showHeader();
+                lastScrollY = currentScrollY;
+                scrollDirection = '';
+                directionDistance = 0;
+                return;
+            }
+
+            if (shouldPause()) {
+                lastScrollY = currentScrollY;
+                scrollDirection = '';
+                directionDistance = 0;
+                return;
+            }
+
+            const delta = currentScrollY - lastScrollY;
+            if (Math.abs(delta) < 1) return;
+
+            const nextDirection = delta > 0 ? 'down' : 'up';
+            if (nextDirection !== scrollDirection) {
+                scrollDirection = nextDirection;
+                directionDistance = Math.abs(delta);
+            } else {
+                directionDistance += Math.abs(delta);
+            }
+
+            // Vuốt nội dung lên (scrollY tăng): ẩn header.
+            if (scrollDirection === 'down' && currentScrollY > 72 && directionDistance >= 18) {
+                hideHeader();
+                directionDistance = 0;
+            }
+
+            // Vuốt nội dung xuống (scrollY giảm): hiện lại header nhanh hơn.
+            if (scrollDirection === 'up' && directionDistance >= 10) {
+                showHeader();
+                directionDistance = 0;
+            }
+
+            lastScrollY = currentScrollY;
+        };
+
+        const scheduleUpdate = () => {
+            if (framePending) return;
+            framePending = true;
+            window.requestAnimationFrame(updateHeaderVisibility);
+        };
+
+        window.addEventListener('scroll', scheduleUpdate, { passive: true });
+        window.addEventListener('resize', () => {
+            if (!isMobileViewport()) showHeader();
+            scheduleUpdate();
+        }, { passive: true });
+        window.addEventListener('orientationchange', () => {
+            showHeader();
+            lastScrollY = Math.max(0, window.scrollY || 0);
+        }, { passive: true });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                lastScrollY = Math.max(0, window.scrollY || 0);
+                if (lastScrollY <= 16) showHeader();
+            }
+        });
+    }
+
     function bootMobileEnhancements() {
-        updateMobileTabLayout();
-        setupHeaderHomeShortcut();
+        const mobile = isMobileViewport();
+        const nav = document.getElementById('mobile-bottom-nav');
+
+        if (mobile) {
+            if (nav && nav.parentElement !== document.body) document.body.appendChild(nav);
+            scheduleMobileTabLayoutSync();
+            setupHeaderHomeShortcut();
+            setupPullToRefresh();
+            setupAutoHideHeaderOnScroll();
+        }
+
         setupNotificationShake();
         setupEmptyStates();
         setupSearchClearButtons();
-        setupPullToRefresh();
         setupDefectImagePicker();
         setupEnhancedDefectSubmit();
 
-        // Gọi lại render một lần để empty state xuất hiện ngay khi danh sách đang trống.
-        ['renderDashboard', 'renderHistory', 'renderCatalog', 'renderUsers'].forEach(name => {
-            if (typeof window[name] === 'function') {
-                try { window[name](); } catch (e) {}
-            }
-        });
+        // Không gọi render hàng loạt khi app vừa mở. Dữ liệu sẽ được dựng
+        // theo đúng tab sau khi phiên đăng nhập đã sẵn sàng.
     }
 
     window.addEventListener('online', () => {
         window.syncOfflineDefects(true).catch(error => console.warn('Lỗi đồng bộ offline:', error));
     });
-    window.addEventListener('resize', updateMobileTabLayout, { passive: true });
+    window.addEventListener('resize', scheduleMobileTabLayoutSync, { passive: true });
+    window.addEventListener('orientationchange', scheduleMobileTabLayoutSync, { passive: true });
+    window.addEventListener('pageshow', scheduleMobileTabLayoutSync, { passive: true });
+    window.addEventListener('load', scheduleMobileTabLayoutSync, { passive: true });
+    window.addEventListener('focusin', scheduleMobileTabLayoutSync, { passive: true });
+    window.addEventListener('focusout', scheduleMobileTabLayoutSync, { passive: true });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', scheduleMobileTabLayoutSync, { passive: true });
+        window.visualViewport.addEventListener('scroll', syncMobileViewportMetrics, { passive: true });
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) scheduleMobileTabLayoutSync();
+    });
+
+    // Khi login-screen đóng hoặc role trên body đổi, dựng lại thanh tab ngay lập tức.
+    const navStateObserver = new MutationObserver(() => {
+        if (isMobileViewport()) scheduleMobileTabLayoutSync();
+    });
+    const loginScreen = document.getElementById('login-screen');
+    if (loginScreen) navStateObserver.observe(loginScreen, { attributes: true, attributeFilter: ['class'] });
+    navStateObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bootMobileEnhancements);

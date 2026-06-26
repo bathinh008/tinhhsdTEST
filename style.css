@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
         .modal-open { overflow: hidden; }
         .animate-in { animation: fadeIn 0.2s ease-out; }
@@ -436,6 +435,13 @@
             transform: translateX(0);
         }
 
+        /* Bắt buộc menu PC tôn trọng class hidden theo quyền.
+           Quy tắc này phải mạnh hơn display:flex của side-menu-item. */
+        .side-menu-item.hidden,
+        #side-menu-panel [hidden] {
+            display: none !important;
+        }
+
         .side-menu-item {
             width: 100%;
             display: flex;
@@ -641,6 +647,15 @@
             }
         }
 
+
+
+/* V3.20: trên PC chỉ admin được thấy tab Tài khoản trong menu điều hướng. */
+@media (min-width: 769px) {
+    body:not(.role-admin) #side-tab-users,
+    body:not(.role-admin) #tab-users {
+        display: none !important;
+    }
+}
 
         /* Desktop account dropdown: form đổi mật khẩu */
         #desktop-password-form input {
@@ -1492,13 +1507,16 @@
 
 @media (max-width: 640px) {
     .app-confirm-overlay {
-        align-items: flex-end;
-        padding: 12px;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
     }
 
     .app-confirm-dialog {
         max-width: none;
-        border-radius: 24px 24px 18px 18px;
+        max-height: min(78vh, 560px);
+        overflow: auto;
+        border-radius: 24px;
         padding: 18px;
     }
 
@@ -1697,6 +1715,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    touch-action: none;
+    overscroll-behavior: contain;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .image-gallery-main-image {
@@ -1708,6 +1730,24 @@
     border-radius: 16px;
     box-shadow: 0 24px 70px rgba(0, 0, 0, .45);
     background: rgba(255,255,255,.06);
+    pointer-events: none;
+    -webkit-user-drag: none;
+    transform-origin: center center;
+    will-change: transform;
+    transition: opacity .14s ease, transform .18s cubic-bezier(.2,.8,.2,1);
+}
+
+.image-gallery-stage.is-interacting .image-gallery-main-image {
+    transition: none;
+}
+
+.image-gallery-stage.is-zoom-animating .image-gallery-main-image {
+    transition: transform .2s cubic-bezier(.2,.8,.2,1), opacity .14s ease;
+}
+
+.image-gallery-stage.is-swiping:not(.is-zoomed) .image-gallery-main-image {
+    opacity: .9;
+    transform: scale(.995);
 }
 
 .image-gallery-nav {
@@ -1729,9 +1769,31 @@
     transition: background .15s ease, transform .15s ease;
 }
 
-.image-gallery-nav:hover {
+@media (hover: hover) and (pointer: fine) {
+    .image-gallery-nav:hover {
+        background: rgba(59, 130, 246, .72);
+        transform: translateY(-50%) scale(1.06);
+    }
+}
+
+.image-gallery-nav:active {
     background: rgba(59, 130, 246, .72);
-    transform: translateY(-50%) scale(1.06);
+    transform: translateY(-50%) scale(.96);
+}
+
+@media (hover: none), (pointer: coarse) {
+    .image-gallery-nav:hover,
+    .image-gallery-nav:focus,
+    .image-gallery-nav:focus-visible {
+        background: rgba(255, 255, 255, .18) !important;
+        transform: translateY(-50%) !important;
+        outline: none;
+    }
+
+    .image-gallery-nav:active {
+        background: rgba(59, 130, 246, .72) !important;
+        transform: translateY(-50%) scale(.96) !important;
+    }
 }
 
 .image-gallery-prev { left: 10px; }
@@ -1749,6 +1811,42 @@
     font-size: 12px;
     font-weight: 800;
     backdrop-filter: blur(8px);
+}
+
+.image-gallery-zoom-indicator {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 4;
+    min-width: 48px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, .72);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    text-align: center;
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity .15s ease, transform .15s ease, visibility .15s ease;
+    pointer-events: none;
+}
+
+.image-gallery-zoom-indicator.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.image-gallery-stage.is-zoomed {
+    cursor: grab;
+}
+
+.image-gallery-stage.is-zoomed.is-interacting {
+    cursor: grabbing;
 }
 
 .image-gallery-thumbs {
@@ -1980,7 +2078,7 @@
 
 .dashboard-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
 }
 
@@ -2315,9 +2413,9 @@
 
 .dashboard-vendor-row {
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 11px;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: flex-start;
+    gap: 12px;
 }
 
 .dashboard-rank {
@@ -2339,22 +2437,61 @@
 
 .dashboard-vendor-main {
     min-width: 0;
+    display: grid;
+    gap: 8px;
 }
 
-.dashboard-vendor-name {
+.dashboard-vendor-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
+    min-width: 0;
+}
+
+.dashboard-vendor-title {
+    min-width: 0;
+    overflow: hidden;
     color: #334155;
     font-size: 12px;
     font-weight: 800;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    word-break: break-word;
 }
 
-.dashboard-vendor-name span:first-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
+.dashboard-vendor-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    flex: 0 0 auto;
+    max-width: 118px;
+}
+
+.dashboard-vendor-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.1;
     white-space: nowrap;
+}
+
+.dashboard-vendor-pill.is-qty {
+    color: #1d4ed8;
+    background: #eff6ff;
+    border-color: #bfdbfe;
 }
 
 .dashboard-vendor-progress {
@@ -2372,12 +2509,6 @@
     background: linear-gradient(90deg, #60a5fa, #2563eb);
 }
 
-.dashboard-vendor-total {
-    color: #0f172a;
-    font-size: 12px;
-    font-weight: 900;
-    white-space: nowrap;
-}
 
 .dashboard-priority-item {
     display: grid;
@@ -2480,6 +2611,29 @@
     margin: 5px 0 0;
     color: #64748b;
     font-size: 12px;
+}
+
+@media (max-width: 640px) {
+    .dashboard-vendor-row {
+        gap: 10px;
+    }
+    .dashboard-vendor-head {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .dashboard-vendor-metrics {
+        max-width: none;
+        justify-content: flex-start;
+    }
+    .dashboard-vendor-pill {
+        min-height: 22px;
+        padding: 3px 8px;
+        font-size: 10px;
+    }
+    .dashboard-vendor-title {
+        font-size: 11px;
+    }
 }
 
 @media (max-width: 1180px) {
@@ -2687,21 +2841,6 @@
 .dashboard-custom-range input { min-width: 0; padding: 8px 9px; border: 1px solid rgba(255,255,255,.2); border-radius: 9px; color: #0f172a; background: #fff; font-size: 12px; }
 .dashboard-custom-range button { align-self: end; min-height: 36px; padding: 0 12px; border-radius: 9px; color: #1e3a8a; background: #dbeafe; font-size: 11px; font-weight: 900; }
 
-.dashboard-collapse-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    min-height: 42px;
-    padding: 0 13px;
-    border: 1px solid rgba(255,255,255,.18);
-    border-radius: 13px;
-    color: #e2e8f0;
-    background: rgba(15,23,42,.25);
-    font-size: 11px;
-    font-weight: 900;
-    white-space: nowrap;
-}
 
 .dashboard-analytics-content {
     display: grid;
@@ -2711,7 +2850,6 @@
     overflow: visible;
     transition: max-height .35s ease, opacity .22s ease;
 }
-.dashboard-analytics-content.dashboard-collapsed { max-height: 0; opacity: 0; overflow: hidden; }
 
 .dashboard-kpi-card[role="button"],
 .dashboard-operation-card[role="button"],
@@ -2741,6 +2879,7 @@
 }
 .dashboard-operation-card:hover { transform: translateY(-2px); border-color: #bfdbfe; }
 .dashboard-operation-icon { flex: 0 0 auto; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; }
+.dashboard-operation-svg { width: 20px; height: 20px; display: block; }
 .dashboard-operation-icon.bg-blue { color: #2563eb; background: #eff6ff; }
 .dashboard-operation-icon.bg-red { color: #dc2626; background: #fef2f2; }
 .dashboard-operation-icon.bg-green { color: #16a34a; background: #f0fdf4; }
@@ -2751,8 +2890,7 @@
 
 button.dashboard-vendor-row { width: 100%; padding: 7px; border: 0; border-radius: 12px; background: transparent; text-align: left; transition: background .15s ease; }
 button.dashboard-vendor-row:hover { background: #f8fafc; }
-.dashboard-vendor-main, .dashboard-vendor-name, .dashboard-vendor-progress { display: block; }
-.dashboard-vendor-name { display: flex; }
+.dashboard-vendor-progress { display: block; }
 
 .dashboard-priority-item.is-overdue { border-color: #fecaca; background: #fff7f7; }
 .dashboard-priority-item.is-overdue .dashboard-priority-icon { color: #b91c1c; background: #fee2e2; }
@@ -2764,12 +2902,35 @@ button.dashboard-vendor-row:hover { background: #f8fafc; }
 .workflow-row-overdue { background: rgba(254,242,242,.45); }
 .workflow-note-preview { max-width: 230px; margin-top: 6px; overflow: hidden; color: #64748b; font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 
-.workflow-timeline-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.workflow-timeline-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
 .workflow-timeline-grid > div { display: grid; gap: 3px; padding: 9px; border: 1px solid #f1f5f9; border-radius: 11px; background: #fff; }
 .workflow-timeline-grid span { color: #94a3b8; font-size: 10px; font-weight: 800; }
 .workflow-timeline-grid strong { color: #334155; font-size: 11px; font-weight: 800; }
 .workflow-schema-warning { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 14px; padding: 11px 12px; border: 1px solid #fde68a; border-radius: 12px; color: #92400e; background: #fffbeb; font-size: 11px; line-height: 1.45; }
 .workflow-schema-warning.hidden { display: none; }
+
+@media (max-width: 640px) {
+    .dashboard-vendor-row {
+        gap: 10px;
+    }
+    .dashboard-vendor-head {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .dashboard-vendor-metrics {
+        max-width: none;
+        justify-content: flex-start;
+    }
+    .dashboard-vendor-pill {
+        min-height: 22px;
+        padding: 3px 8px;
+        font-size: 10px;
+    }
+    .dashboard-vendor-title {
+        font-size: 11px;
+    }
+}
 
 @media (max-width: 1180px) {
     .dashboard-operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2777,12 +2938,12 @@ button.dashboard-vendor-row:hover { background: #f8fafc; }
 
 @media (max-width: 768px) {
     .dashboard-hero-actions { align-items: stretch; flex-direction: column; }
-    .dashboard-collapse-btn { width: 100%; }
     .dashboard-custom-range { grid-template-columns: 1fr 1fr; }
     .dashboard-custom-range button { grid-column: 1 / -1; }
     .dashboard-operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .dashboard-operation-card { align-items: flex-start; flex-direction: column; padding: 12px; }
     .dashboard-operation-icon { width: 34px; height: 34px; }
+    .dashboard-operation-svg { width: 18px; height: 18px; }
     .dashboard-operation-card strong { font-size: 12px; white-space: normal; }
 }
 
@@ -2812,5 +2973,576 @@ button.dashboard-vendor-row:hover { background: #f8fafc; }
 
     #mobile-bottom-nav[data-tab-count="6"] button span {
         font-size: 9px;
+    }
+}
+
+
+/* ===== V3.1: Dashboard luôn mở + điều hướng mobile luôn hiển thị ===== */
+.dashboard-analytics-content {
+    max-height: none !important;
+    opacity: 1 !important;
+    overflow: visible !important;
+}
+
+@media (max-width: 768px) {
+    /* Không tự ẩn header khi cuộn xuống. */
+    body.mobile-header-hidden header,
+    header {
+        transform: none !important;
+    }
+
+    header {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 90 !important;
+    }
+
+    /* Giữ HUD/tab dưới cố định trong vùng nhìn thấy của trình duyệt. */
+    #mobile-bottom-nav {
+        position: fixed !important;
+        display: grid !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        z-index: 95 !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        transform: translate3d(0, 0, 0) !important;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+        touch-action: manipulation;
+    }
+
+    body {
+        min-height: 100dvh;
+        padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom)) !important;
+    }
+}
+
+
+/* ===== V3.2: đồng bộ thanh tab mobile ngay sau đăng nhập ===== */
+@media (max-width: 768px) {
+    #mobile-bottom-nav {
+        grid-template-columns: repeat(var(--mobile-tab-count, 4), minmax(0, 1fr)) !important;
+        contain: layout paint;
+    }
+
+    #mobile-bottom-nav.mobile-nav-ready button:not(.mobile-tab-hidden) {
+        display: flex !important;
+    }
+
+    #mobile-bottom-nav button.mobile-tab-hidden,
+    #mobile-bottom-nav button[hidden] {
+        display: none !important;
+    }
+
+    #mobile-bottom-nav[data-tab-count="4"] {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+
+    #mobile-bottom-nav[data-tab-count="5"] {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    }
+
+    #mobile-bottom-nav[data-tab-count="6"] {
+        grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    }
+}
+
+
+/* ===== V3.3: thanh tab mobile bám đúng visual viewport ===== */
+:root {
+    --mobile-visual-bottom: 0px;
+    --mobile-nav-measured-height: 82px;
+}
+
+@media (max-width: 768px) {
+    html {
+        min-height: 100%;
+        background: #f8fafc;
+    }
+
+    body {
+        min-height: 100svh !important;
+        padding-bottom: calc(var(--mobile-nav-measured-height) + var(--mobile-visual-bottom) + 12px) !important;
+    }
+
+    main {
+        padding-bottom: calc(var(--mobile-nav-measured-height) + var(--mobile-visual-bottom) + 28px) !important;
+    }
+
+    #mobile-bottom-nav {
+        position: fixed !important;
+        inset: auto 0 var(--mobile-visual-bottom) 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        display: grid !important;
+        grid-template-columns: repeat(var(--mobile-tab-count, 4), minmax(0, 1fr)) !important;
+        gap: 4px !important;
+        min-height: 72px;
+        padding: 7px 8px calc(7px + env(safe-area-inset-bottom, 0px)) !important;
+        background: rgba(255, 255, 255, 0.985) !important;
+        border: 1px solid rgba(203, 213, 225, .95) !important;
+        border-left: 0 !important;
+        border-right: 0 !important;
+        border-bottom: 0 !important;
+        border-radius: 18px 18px 0 0 !important;
+        box-shadow: 0 -8px 28px rgba(15, 23, 42, .16) !important;
+        z-index: 2147483000 !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transform: none !important;
+        translate: none !important;
+        contain: none !important;
+        isolation: isolate;
+        backface-visibility: visible !important;
+        -webkit-backface-visibility: visible !important;
+    }
+
+    #mobile-bottom-nav.mobile-nav-ready {
+        display: grid !important;
+    }
+
+    #mobile-bottom-nav button {
+        min-width: 0 !important;
+        min-height: 58px !important;
+        padding: 7px 2px !important;
+        overflow: hidden;
+    }
+
+    #mobile-bottom-nav button span {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #mobile-bottom-nav button.mobile-tab-hidden,
+    #mobile-bottom-nav button[hidden] {
+        display: none !important;
+    }
+
+    body.keyboard-open #mobile-bottom-nav {
+        display: none !important;
+    }
+}
+
+
+/* ===== V3.4: đồng bộ vị trí và khoảng cách của tất cả tab mobile ===== */
+@media (max-width: 768px) {
+    html,
+    body {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: clip !important;
+    }
+
+    /* Mọi tab dùng chung một khung ngoài, tránh Dashboard lệch 2px/14px so với tab khác. */
+    #view-dashboard,
+    #view-defects,
+    #view-history,
+    #view-catalog,
+    #view-users,
+    #view-logs {
+        position: relative !important;
+        left: auto !important;
+        right: auto !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+        padding-top: 20px !important;
+        padding-bottom: calc(var(--mobile-nav-measured-height) + var(--mobile-visual-bottom) + 28px) !important;
+        transform: none !important;
+    }
+
+    #view-dashboard > .dashboard-shell,
+    #view-dashboard .dashboard-analytics-content,
+    #view-dashboard .dashboard-kpi-grid,
+    #view-dashboard .dashboard-operations-grid,
+    #view-dashboard .dashboard-insights-grid,
+    #view-dashboard .dashboard-lower-grid {
+        width: 100%;
+        max-width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    /* Các vùng cần cuộn ngang tự cuộn bên trong, không đẩy lệch cả trang. */
+    .dashboard-bars,
+    .action-scroll-row,
+    .overflow-x-auto {
+        max-width: 100%;
+    }
+}
+
+/* ===== V3.5: fix tràn nội dung thẻ ưu tiên trên mobile ===== */
+.dashboard-priority-list {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+}
+
+.dashboard-priority-item {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-align: left;
+}
+
+.dashboard-priority-item > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.dashboard-priority-copy {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.dashboard-priority-name,
+.dashboard-priority-meta {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-priority-age {
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (max-width: 430px) {
+    .dashboard-priority-item {
+        grid-template-columns: 38px minmax(0, 1fr);
+        align-items: start;
+        column-gap: 10px;
+        row-gap: 7px;
+        padding: 12px;
+    }
+
+    .dashboard-priority-icon {
+        grid-row: 1 / span 2;
+        width: 38px;
+        height: 38px;
+    }
+
+    .dashboard-priority-copy {
+        grid-column: 2;
+        width: 100%;
+    }
+
+    .dashboard-priority-name {
+        display: -webkit-box;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        line-height: 1.35;
+    }
+
+    .dashboard-priority-meta {
+        margin-top: 5px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.35;
+    }
+
+    .dashboard-priority-age {
+        grid-column: 2;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        white-space: normal;
+    }
+
+    .dashboard-priority-age > span:first-child {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .dashboard-priority-status {
+        flex: 0 0 auto;
+        max-width: 100%;
+        white-space: nowrap;
+    }
+}
+
+/* V3.12: Tổng lỗi ở hàng trên; Chờ xử lý và Hoàn thành nằm cạnh nhau */
+@media (max-width: 768px) {
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:first-child {
+        grid-column: 1 / -1;
+    }
+
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(2),
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(3) {
+        grid-column: auto;
+    }
+}
+
+
+/* v3.10 - Status actions: always horizontal and gray out current state */
+.status-action-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.status-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 11px 10px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-align: center;
+    transition: transform .15s ease, background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+.status-action-btn:not(:disabled):active {
+    transform: scale(.98);
+}
+
+.status-action-pending {
+    color: #92400e;
+    background: #fef3c7;
+    border-color: #fde68a;
+}
+
+.status-action-pending:not(:disabled):hover {
+    background: #fde68a;
+}
+
+.status-action-resolved {
+    color: #166534;
+    background: #dcfce7;
+    border-color: #bbf7d0;
+}
+
+.status-action-resolved:not(:disabled):hover {
+    background: #bbf7d0;
+}
+
+.status-action-btn.is-current,
+.status-action-btn:disabled {
+    color: #64748b;
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+@media (max-width: 420px) {
+    .status-action-row { gap: 8px; }
+    .status-action-btn {
+        min-height: 46px;
+        padding: 10px 7px;
+        font-size: 12px;
+    }
+}
+
+
+/* V3.15: cân bằng chiều cao và vị trí nội dung 2 KPI trạng thái trên mobile */
+@media (max-width: 768px) {
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(2),
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(3) {
+        display: flex;
+        flex-direction: column;
+        align-self: stretch;
+        min-height: 154px;
+    }
+
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(2) .dashboard-kpi-top,
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(3) .dashboard-kpi-top {
+        min-height: 67px;
+    }
+
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(2) .dashboard-kpi-top > div,
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(3) .dashboard-kpi-top > div {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(2) .dashboard-kpi-label,
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(3) .dashboard-kpi-label {
+        min-height: 28px;
+        line-height: 1.35;
+    }
+
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(2) .dashboard-kpi-foot,
+    #view-dashboard .dashboard-kpi-grid > .dashboard-kpi-card:nth-child(3) .dashboard-kpi-foot {
+        width: 100%;
+        min-height: 50px;
+        margin-top: auto;
+    }
+}
+
+/* ===== V3.19: Ẩn toàn bộ HUD mobile trước khi đăng nhập ===== */
+@media (max-width: 768px) {
+    #mobile-bottom-nav.auth-nav-hidden,
+    #mobile-bottom-nav[hidden],
+    body:not(.app-authenticated) #mobile-bottom-nav {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transform: translateY(120%) !important;
+    }
+
+    body:not(.app-authenticated) {
+        padding-bottom: 0 !important;
+    }
+
+    body:not(.app-authenticated) main {
+        padding-bottom: 28px !important;
+    }
+}
+
+
+/* v3.21.0 - Ẩn header và thanh tab mobile khi mở chế độ xem ảnh */
+@media (max-width: 768px) {
+    body.image-modal-open header,
+    body:has(#modal-image:not(.hidden)) header {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transform: translateY(-12px) !important;
+    }
+
+    body.image-modal-open #mobile-bottom-nav,
+    body:has(#modal-image:not(.hidden)) #mobile-bottom-nav {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transform: translateY(16px) !important;
+    }
+}
+
+
+/* v3.23.0 - Zoom ảnh kiểu ứng dụng chat: pinch, double tap và kéo ảnh */
+@media (max-width: 768px) {
+    .image-gallery-stage {
+        cursor: default;
+        touch-action: none;
+    }
+
+    .image-gallery-stage.is-swiping,
+    .image-gallery-stage.is-zoomed {
+        cursor: grab;
+    }
+
+    .image-gallery-stage.is-interacting {
+        cursor: grabbing;
+    }
+
+    .image-gallery-zoom-indicator {
+        top: 10px;
+        left: 10px;
+    }
+}
+
+
+/* v3.24.0 - Tự ẩn header khi vuốt nội dung lên trên mobile */
+@media (max-width: 768px) {
+    header {
+        transition: transform .22s ease, opacity .18s ease, box-shadow .22s ease !important;
+        will-change: transform, opacity;
+    }
+
+    body.mobile-header-hidden:not(.image-modal-open) header {
+        transform: translate3d(0, calc(-100% - 4px), 0) !important;
+        opacity: 0 !important;
+        visibility: visible !important;
+        pointer-events: none !important;
+        box-shadow: none !important;
+    }
+
+    body:not(.mobile-header-hidden) header {
+        transform: translate3d(0, 0, 0) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+}
+
+
+/* v3.25.0 - Ẩn header và thanh tab khi mở popup/modal/xác nhận trên mobile */
+@media (max-width: 768px) {
+    body.modal-open header,
+    body.confirm-open header,
+    body.image-modal-open header,
+    body:has(.app-confirm-overlay) header,
+    body:has([id^="modal-"]:not(.hidden)) header {
+        transform: translate3d(0, calc(-100% - 8px), 0) !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        box-shadow: none !important;
+    }
+
+    body.modal-open #mobile-bottom-nav,
+    body.confirm-open #mobile-bottom-nav,
+    body.image-modal-open #mobile-bottom-nav,
+    body:has(.app-confirm-overlay) #mobile-bottom-nav,
+    body:has([id^="modal-"]:not(.hidden)) #mobile-bottom-nav {
+        transform: translate3d(0, calc(100% + 18px), 0) !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    body.modal-open,
+    body.confirm-open,
+    body.image-modal-open {
+        --mobile-bottom-nav-height: 0px;
+    }
+}
+
+
+/* v3.26.0 - Ẩn header và thanh tab khi mở bảng Thông báo trên mobile */
+@media (max-width: 768px) {
+    body.notification-panel-open header {
+        transform: translate3d(0, calc(-100% - 8px), 0) !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        box-shadow: none !important;
+    }
+
+    body.notification-panel-open #mobile-bottom-nav {
+        transform: translate3d(0, calc(100% + 18px), 0) !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    body.notification-panel-open {
+        --mobile-bottom-nav-height: 0px;
     }
 }

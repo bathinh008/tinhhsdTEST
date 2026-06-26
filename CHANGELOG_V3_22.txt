@@ -1,0 +1,6 @@
+v3.22.0
+- Sửa nút chuyển ảnh trên mobile bị giữ màu hover sau khi chạm.
+- Hover màu xanh chỉ còn áp dụng cho thiết bị dùng chuột.
+- Mobile chỉ đổi màu nút trong lúc đang nhấn.
+- Thêm vuốt trái để xem ảnh kế tiếp và vuốt phải để quay lại ảnh trước.
+- Không làm ảnh hưởng thao tác vuốt chuyển tab bên ngoài modal xem ảnh.

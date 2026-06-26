@@ -1,0 +1,4 @@
+v3.13.0
+- Chuyển popup xác nhận hoàn thành từ dạng trồi dưới lên sang căn giữa màn hình trên mobile.
+- Giữ 2 nút Hủy / Xác nhận nằm ngang, dễ bấm hơn.
+- Giới hạn chiều cao popup để không che toàn màn hình khi nội dung dài.

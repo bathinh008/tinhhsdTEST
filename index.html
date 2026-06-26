@@ -2,18 +2,18 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Dashboard | Quản lý hàng lỗi</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="./tailwind.min.css?v=3.14.0">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-	<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+	<script defer src="./vendor/browser-image-compression.js?v=3.14.0"></script>
     <!-- SheetJS for Excel -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script defer src="./vendor/xlsx.full.min.js?v=3.14.0"></script>
     <!-- Camera Barcode Scanner -->
     <!-- Barcode Detector polyfill sẽ được nạp động bằng import() khi cần quét -->
     <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="./style.css">
+    <script defer src="./vendor/supabase.umd.js?v=3.14.0"></script>
+    <link rel="stylesheet" href="./style.css?v=3.26.0">
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen pb-20 md:pb-0">
 
@@ -79,7 +79,7 @@
                 </div>
             </div>
             <nav id="top-tab-nav" class="hidden">
-				<button onclick="switchTab('dashboard')" id="tab-dashboard" class="py-5 px-1 tab-active transition-all">Dashboard</button>
+				<button onclick="switchTab('dashboard')" id="tab-dashboard" class="admin-only py-5 px-1 tab-active transition-all">Dashboard</button>
 				<button onclick="switchTab('defects')" id="tab-defects" class="py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">Hàng lỗi</button>
 				<button onclick="switchTab('history')" id="tab-history" class="py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">Lịch sử</button>
 				<button onclick="switchTab('catalog')" id="tab-catalog" class="admin-po-only py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">
@@ -87,9 +87,8 @@
 				</button>
 				<button onclick="switchTab('users')" 
 					id="tab-users"
-					class="admin-only py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">
-					
-					Quản lý tài khoản
+					class="py-5 px-1 text-slate-500 hover:text-blue-600 transition-all">
+					<span id="top-account-tab-label">Tài khoản</span>
 				</button>
 				<button onclick="switchTab('logs')"
 					id="tab-logs"
@@ -156,7 +155,7 @@
         </div>
 
         <div class="p-3 space-y-1">
-            <button onclick="switchTab('dashboard'); toggleSideMenu(false);" id="side-tab-dashboard" class="side-menu-item active">
+            <button onclick="switchTab('dashboard'); toggleSideMenu(false);" id="side-tab-dashboard" class="admin-only side-menu-item active">
                 <i class="fas fa-chart-pie"></i>
                 <span>Dashboard</span>
             </button>
@@ -176,9 +175,9 @@
                 <span>Danh mục hàng hóa</span>
             </button>
 
-            <button onclick="switchTab('users'); toggleSideMenu(false);" id="side-tab-users" class="admin-only side-menu-item">
-                <i class="fas fa-users-gear"></i>
-                <span>Quản lý tài khoản</span>
+            <button onclick="switchTab('users'); toggleSideMenu(false);" id="side-tab-users" class="side-menu-item">
+                <i id="side-account-tab-icon" class="fas fa-user-circle"></i>
+                <span id="side-account-tab-label">Tài khoản</span>
             </button>
 
             <button onclick="switchTab('logs'); toggleSideMenu(false);" id="side-tab-logs" class="admin-only side-menu-item">
@@ -189,50 +188,9 @@
     </aside>
 
 
-	<!-- Mobile Bottom Nav -->
-	<nav id="mobile-bottom-nav"
-		class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] px-2 py-2 grid grid-cols-5 gap-1">
-
-		<button onclick="switchTab('dashboard')" id="m-tab-dashboard"
-			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-blue-600 bg-blue-50 font-semibold text-[11px]">
-			<i class="fas fa-chart-pie text-lg"></i>
-			<span>Tổng quan</span>
-		</button>
-
-		<button onclick="switchTab('defects')" id="m-tab-defects"
-			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
-			<i class="fas fa-triangle-exclamation text-lg"></i>
-			<span>Hàng lỗi</span>
-		</button>
-
-		<button onclick="switchTab('history')" id="m-tab-history"
-			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
-			<i class="fas fa-rotate-left text-lg"></i>
-			<span>Lịch sử</span>
-		</button>
-
-		<button onclick="switchTab('catalog')" id="m-tab-catalog"
-			class="admin-po-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
-			<i class="fas fa-boxes-stacked text-lg"></i>
-			<span>Danh mục</span>
-		</button>
-
-		<button onclick="switchTab('users')" id="m-tab-users"
-			class="mobile-account-tab flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
-			<i class="fas fa-users-gear text-lg"></i>
-			<span>Tài khoản</span>
-		</button>
-
-		<button onclick="switchTab('logs')" id="m-tab-logs"
-			class="admin-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
-			<i class="fas fa-clipboard-list text-lg"></i>
-			<span>Log</span>
-		</button>
-
-	</nav>
 
     <!-- Dashboard View -->
-    <main id="view-dashboard" class="w-[94%] max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <main id="view-dashboard" class="admin-only w-[94%] max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Dashboard Analytics -->
         <section class="dashboard-shell mb-7">
             <div class="dashboard-hero-card">
@@ -269,10 +227,6 @@
                             </button>
                         </div>
                     </div>
-                    <button id="dashboard-collapse-btn" type="button" class="dashboard-collapse-btn" onclick="toggleDashboardAnalytics()" aria-expanded="true">
-                        <i class="fas fa-chevron-up"></i>
-                        <span>Thu gọn</span>
-                    </button>
                 </div>
             </div>
 
@@ -305,22 +259,7 @@
                         <span class="dashboard-kpi-note"><i class="fas fa-circle"></i> Cần theo dõi</span>
                     </div>
                 </article>
-
-                <article class="dashboard-kpi-card dashboard-kpi-orange" data-status-card="Fixing" role="button" tabindex="0" onclick="applyDashboardStatusFilter('Fixing')" onkeydown="handleDashboardCardKey(event, 'Fixing')">
-                    <div class="dashboard-kpi-top">
-                        <div>
-                            <span class="dashboard-kpi-label">Số lượng đang sửa</span>
-                            <strong id="stat-fixing">0</strong>
-                        </div>
-                        <span class="dashboard-kpi-icon"><i class="fas fa-screwdriver-wrench"></i></span>
-                    </div>
-                    <div class="dashboard-kpi-foot">
-                        <span id="dashboard-fixing-share">0 báo cáo · 0%</span>
-                        <span id="dashboard-oldest-open" class="dashboard-kpi-note">Không có tồn đọng</span>
-                    </div>
-                </article>
-
-                <article class="dashboard-kpi-card dashboard-kpi-green" data-status-card="Resolved" role="button" tabindex="0" onclick="applyDashboardStatusFilter('Resolved')" onkeydown="handleDashboardCardKey(event, 'Resolved')">
+<article class="dashboard-kpi-card dashboard-kpi-green" data-status-card="Resolved" role="button" tabindex="0" onclick="applyDashboardStatusFilter('Resolved')" onkeydown="handleDashboardCardKey(event, 'Resolved')">
                     <div class="dashboard-kpi-top">
                         <div>
                             <span class="dashboard-kpi-label">Số lượng đã hoàn thành</span>
@@ -340,9 +279,17 @@
                     <span class="dashboard-operation-icon bg-blue"><i class="fas fa-stopwatch"></i></span>
                     <div><span>Thời gian hoàn tất TB</span><strong id="dashboard-avg-resolution">Chưa có dữ liệu</strong></div>
                 </article>
-                <article class="dashboard-operation-card" role="button" tabindex="0" onclick="applyDashboardAgingFilter('overdue')">
-                    <span class="dashboard-operation-icon bg-red"><i class="fas fa-calendar-xmark"></i></span>
-                    <div><span>Quá hạn toàn hệ thống</span><strong id="dashboard-overdue-count">0 mục</strong></div>
+                <article class="dashboard-operation-card">
+                    <span class="dashboard-operation-icon bg-red" aria-hidden="true">
+                        <svg class="dashboard-operation-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7 3.75H13.25L17.75 8.25V13.25" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M7 3.75C5.89543 3.75 5 4.64543 5 5.75V18.25C5 19.3546 5.89543 20.25 7 20.25H12.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                            <path d="M13 3.75V8.5H17.75" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/>
+                            <circle cx="17.5" cy="17.5" r="3.75" stroke="currentColor" stroke-width="1.9"/>
+                            <path d="M17.5 15.75V19.25M15.75 17.5H19.25" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                    <div><span>Báo cáo mới hôm nay</span><strong id="dashboard-created-today">0 báo cáo</strong></div>
                 </article>
                 <article class="dashboard-operation-card">
                     <span class="dashboard-operation-icon bg-green"><i class="fas fa-check-double"></i></span>
@@ -417,9 +364,9 @@
     <main id="view-defects" class="w-[94%] max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 hidden">
         <div class="dashboard-list-title" id="dashboard-detail-section">
             <div>
-                <span class="dashboard-panel-kicker">Chi tiết báo cáo</span>
-                <h2>Danh sách hàng lỗi đang xử lý</h2>
-                <p>Tìm kiếm, lọc, cập nhật trạng thái hoặc xuất dữ liệu Excel.</p>
+                <span class="dashboard-panel-kicker">Hàng lỗi</span>
+                <h2>Danh sách báo cáo hàng lỗi</h2>
+                <p>Theo dõi, tìm kiếm, lọc, cập nhật trạng thái hoặc xuất dữ liệu Excel.</p>
             </div>
             <span id="dashboard-visible-count" class="dashboard-list-count">0 mục</span>
         </div>
@@ -481,7 +428,6 @@
                 >
                     <option value="All">Đang xử lý: tất cả</option>
                     <option value="Pending">Chờ xử lý</option>
-                    <option value="Fixing">Đang sửa</option>
                     <option value="Resolved">Đã hoàn thành</option>
                 </select>
 
@@ -497,10 +443,10 @@
                 <select id="filter-aging"
                     class="w-full md:w-52 bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
                     onchange="rememberDashboardFilters(); renderDashboard()">
-                    <option value="All">Tất cả thời hạn</option>
-                    <option value="overdue">Đã quá hạn</option>
-                    <option value="dueSoon">Sắp đến hạn 48 giờ</option>
-                    <option value="older7">Tồn trên 7 ngày</option>
+                    <option value="All">Tất cả thời gian tồn</option>
+                    <option value="older3">Tồn từ 3 ngày</option>
+                    <option value="older7">Tồn từ 7 ngày</option>
+                    <option value="older30">Tồn từ 30 ngày</option>
                 </select>
             </div>
         </div>
@@ -912,17 +858,13 @@
 					<label class="block text-sm font-medium text-slate-700">Hình ảnh sản phẩm lỗi</label>
 					<input type="file" id="f-image" accept="image/*" required class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4">
                     <select name="severity" class="px-3 py-2 border rounded-lg">
                         <option value="Low">Thấp</option>
                         <option value="Medium" selected>Trung bình</option>
                         <option value="High">Nghiêm trọng</option>
                     </select>
-                    <select name="status" class="px-3 py-2 border rounded-lg">
-                        <option value="Pending">Chờ xử lý</option>
-                        <option value="Fixing">Đang sửa</option>
-                        <option value="Resolved">Đã hoàn thành</option>
-                    </select>
+                    <input type="hidden" name="status" value="Pending">
                 </div>
                 <input type="hidden" name="barcode" id="f-barcode">
                 <button type="submit" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">Lưu báo cáo</button>
@@ -987,15 +929,16 @@
 				<i class="fas fa-times"></i>
 			</button>
 
-			<div class="image-gallery-stage">
-				<button id="image-gallery-prev" type="button" class="image-gallery-nav image-gallery-prev" onclick="prevDefectImage()" aria-label="Ảnh trước">
+			<div class="image-gallery-stage" data-gallery-swipe="true" aria-label="Chụm hai ngón để phóng to, kéo để di chuyển hoặc vuốt trái phải để chuyển ảnh">
+				<button id="image-gallery-prev" type="button" class="image-gallery-nav image-gallery-prev" onclick="prevDefectImage(this)" aria-label="Ảnh trước">
 					<i class="fas fa-chevron-left"></i>
 				</button>
-				<img id="full-res-image" src="" class="image-gallery-main-image" alt="Ảnh lỗi">
-				<button id="image-gallery-next" type="button" class="image-gallery-nav image-gallery-next" onclick="nextDefectImage()" aria-label="Ảnh sau">
+				<img id="full-res-image" src="" class="image-gallery-main-image" alt="Ảnh lỗi" draggable="false">
+				<button id="image-gallery-next" type="button" class="image-gallery-nav image-gallery-next" onclick="nextDefectImage(this)" aria-label="Ảnh sau">
 					<i class="fas fa-chevron-right"></i>
 				</button>
 				<div id="image-gallery-counter" class="image-gallery-counter">1/1</div>
+				<div id="image-gallery-zoom" class="image-gallery-zoom-indicator" aria-live="polite">100%</div>
 			</div>
 
 			<div id="image-gallery-thumbs" class="image-gallery-thumbs"></div>
@@ -1015,7 +958,7 @@
             <div class="flex items-start justify-between mb-4">
                 <div>
                     <h2 class="text-xl font-bold text-slate-800 leading-tight">Cập nhật xử lý hàng lỗi</h2>
-                    <p class="text-sm text-slate-400 mt-1">Cập nhật trạng thái, người phụ trách và thời hạn xử lý</p>
+                    <p class="text-sm text-slate-400 mt-1">Chuyển trạng thái giữa Chờ xử lý và Hoàn thành</p>
                 </div>
                 <button onclick="toggleModal('modal-status', false)" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-500 transition-all">
                     <i class="fas fa-times"></i>
@@ -1038,7 +981,6 @@
                 </div>
                 <div class="workflow-timeline-grid mt-3">
                     <div><span>Tiếp nhận</span><strong id="status-created-at">-</strong></div>
-                    <div><span>Bắt đầu sửa</span><strong id="status-fixing-at">-</strong></div>
                     <div><span>Hoàn thành</span><strong id="status-resolved-at">-</strong></div>
                     <div><span>Thời gian hoàn tất</span><strong id="status-processing-time">-</strong></div>
                 </div>
@@ -1046,21 +988,10 @@
 
             <div id="workflow-schema-warning" class="workflow-schema-warning hidden">
                 <i class="fas fa-database"></i>
-                <span>Database chưa có các cột quản lý thời gian. Hãy chạy file <b>SUPABASE_UPGRADE_V2.sql</b>.</span>
+                <span>Database chưa có cột lưu thời gian hoàn thành và ghi chú. Hãy chạy file <b>SUPABASE_UPGRADE_V3_9.sql</b>.</span>
             </div>
 
             <div class="space-y-3 mb-4">
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">Người phụ trách</label>
-                    <input id="status-assigned-to" list="status-assignee-options" placeholder="Nhập tên người phụ trách"
-                        class="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
-                    <datalist id="status-assignee-options"></datalist>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">Hạn xử lý</label>
-                    <input id="status-due-at" type="datetime-local"
-                        class="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
-                </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-500 mb-1">Ghi chú kết quả xử lý</label>
                     <textarea id="status-resolution-note" rows="3" maxlength="1000" placeholder="Ví dụ: Đã đổi sản phẩm, trả NCC, sửa bao bì..."
@@ -1068,15 +999,14 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <button onclick="saveStatus('Pending')" class="w-full py-3 rounded-xl text-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-bold">
-                    <i class="fas fa-hourglass-half mr-1"></i> Chờ xử lý
+            <div class="status-action-row">
+                <button id="status-btn-pending" type="button" onclick="saveStatus('Pending')" class="status-action-btn status-action-pending">
+                    <i class="fas fa-hourglass-half"></i>
+                    <span>Chờ xử lý</span>
                 </button>
-                <button onclick="saveStatus('Fixing')" class="w-full py-3 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-800 font-bold">
-                    <i class="fas fa-screwdriver-wrench mr-1"></i> Đang sửa
-                </button>
-                <button onclick="saveStatus('Resolved')" class="w-full py-3 rounded-xl bg-green-100 hover:bg-green-200 text-green-800 font-bold">
-                    <i class="fas fa-circle-check mr-1"></i> Hoàn thành
+                <button id="status-btn-resolved" type="button" onclick="saveStatus('Resolved')" class="status-action-btn status-action-resolved">
+                    <i class="fas fa-circle-check"></i>
+                    <span>Hoàn thành</span>
                 </button>
             </div>
         </div>
@@ -1311,8 +1241,50 @@
         <i class="fas fa-arrow-up"></i>
     </button>
 
-    <script src="./supabase.js"></script>
-    <script src="./app.js"></script>
-    <script src="./mobile.js"></script>
+	<!-- Mobile Bottom Nav -->
+	<nav id="mobile-bottom-nav" aria-label="Điều hướng chính" aria-hidden="true" hidden data-nav-version="3.19"
+		class="auth-nav-hidden md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] px-2 py-2 grid grid-cols-5 gap-1">
+
+		<button onclick="switchTab('dashboard')" id="m-tab-dashboard"
+			class="admin-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-blue-600 bg-blue-50 font-semibold text-[11px]">
+			<i class="fas fa-chart-pie text-lg"></i>
+			<span>Tổng quan</span>
+		</button>
+
+		<button onclick="switchTab('defects')" id="m-tab-defects"
+			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-triangle-exclamation text-lg"></i>
+			<span>Hàng lỗi</span>
+		</button>
+
+		<button onclick="switchTab('history')" id="m-tab-history"
+			class="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-rotate-left text-lg"></i>
+			<span>Lịch sử</span>
+		</button>
+
+		<button onclick="switchTab('catalog')" id="m-tab-catalog"
+			class="admin-po-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-boxes-stacked text-lg"></i>
+			<span>Danh mục</span>
+		</button>
+
+		<button onclick="switchTab('users')" id="m-tab-users"
+			class="mobile-account-tab flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-users-gear text-lg"></i>
+			<span>Tài khoản</span>
+		</button>
+
+		<button onclick="switchTab('logs')" id="m-tab-logs"
+			class="admin-only flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-slate-500 font-semibold text-[11px]">
+			<i class="fas fa-clipboard-list text-lg"></i>
+			<span>Log</span>
+		</button>
+
+	</nav>
+
+    <script defer src="./supabase.js?v=3.26.0"></script>
+    <script defer src="./app.js?v=3.26.0"></script>
+    <script defer src="./mobile.js?v=3.26.0"></script>
 </body>
 </html>

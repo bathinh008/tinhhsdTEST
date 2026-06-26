@@ -1,0 +1,7 @@
+HANGLOI DASHBOARD V3.4 - MOBILE TAB ALIGNMENT
+
+- Đồng nhất lề trái/phải, chiều rộng và khoảng cách trên của tất cả tab trên mobile.
+- Dashboard không còn lệch 2px so với Hàng lỗi, Lịch sử, Tài khoản.
+- Khi chuyển tab, trang tự đưa về đầu tab và đặt scroll ngang về 0.
+- Ngăn nội dung con làm tràn ngang hoặc đẩy lệch toàn bộ trang.
+- Cập nhật cache CSS/JS lên phiên bản 3.4.0.

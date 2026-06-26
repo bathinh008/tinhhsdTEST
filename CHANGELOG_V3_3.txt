@@ -1,0 +1,9 @@
+HANGLOI DASHBOARD V3.3 - MOBILE NAV FIX
+
+- Thanh tab mobile được chuyển xuống cuối body để tách khỏi nội dung Dashboard.
+- Bám theo Visual Viewport, tránh bị thanh công cụ trình duyệt che khuất.
+- Đo chiều cao HUD thật và tự chừa khoảng trống cuối trang.
+- Đồng bộ lại Dashboard và quyền tab ngay sau đăng nhập/khôi phục phiên.
+- Bỏ contain/transform có thể gây lỗi compositor trên Chrome mobile.
+- Ẩn HUD khi bàn phím ảo mở để không che ô nhập liệu.
+- Cache-busting CSS/JS: v3.3.0.

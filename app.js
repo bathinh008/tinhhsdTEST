@@ -1,3 +1,27 @@
+(function ensureSafeLocalStorage() {
+    try {
+        const storage = window.localStorage;
+        const key = '__hangloi_storage_test__';
+        storage.setItem(key, '1');
+        storage.removeItem(key);
+    } catch (error) {
+        const memory = new Map();
+        const fallbackStorage = {
+            getItem(key) { return memory.has(String(key)) ? memory.get(String(key)) : null; },
+            setItem(key, value) { memory.set(String(key), String(value)); },
+            removeItem(key) { memory.delete(String(key)); },
+            clear() { memory.clear(); },
+            key(index) { return Array.from(memory.keys())[index] ?? null; },
+            get length() { return memory.size; }
+        };
+        try {
+            Object.defineProperty(window, 'localStorage', { configurable: true, value: fallbackStorage });
+        } catch (defineError) {
+            window.safeLocalStorage = fallbackStorage;
+        }
+    }
+})();
+
 let defectsData = [];
         let catalogData = [];
 		
@@ -229,11 +253,16 @@ let defectsData = [];
                 dialog.appendChild(actions);
                 overlay.appendChild(dialog);
                 document.body.appendChild(overlay);
+                document.body.classList.add('confirm-open');
 
+                let closed = false;
                 const close = (result) => {
+                    if (closed) return;
+                    closed = true;
                     overlay.classList.remove('show');
                     dialog.classList.remove('show');
                     document.removeEventListener('keydown', onKeyDown);
+                    document.body.classList.remove('confirm-open');
                     setTimeout(() => overlay.remove(), 180);
                     resolve(result);
                 };
@@ -345,37 +374,108 @@ let defectsData = [];
 			}
 		}
 		
-        async function init() {
-			if (!supabaseClient) {
-				updateStatusUI('offline');
-				return;
-			}
-			updateStatusUI('connecting');
-			showAppLoading('Đang kết nối hệ thống...', 'Đang tải báo cáo lỗi và danh mục');
-			
-			try {
-				// Chỉ tải dữ liệu công khai ban đầu. Thông báo sẽ tải sau khi đăng nhập xong
-				// để tránh Auth/Anon bị lệch quyền và tránh lỗi WebSocket.
-				await Promise.all([fetchDefects(), fetchCatalog()]);
-				updateStatusUI('online');
-			} finally {
-				hideAppLoading(true);
-			}
-		}
+        let defectsFetchPromise = null;
+        let catalogFetchPromise = null;
+        let catalogLoaded = false;
+        let postLoginFeaturesInitialized = false;
 
-        async function fetchDefects() {
-            const { data, error } = await supabaseClient.from('defects').select('*').order('created_at', { ascending: false });
-            if (!error) { 
-				defectsData = data || []; 
-				renderDashboard();
-				renderHistory();
-				updateStats();
-			}
+        function initializePostLoginFeatures() {
+            if (postLoginFeaturesInitialized) return;
+            postLoginFeaturesInitialized = true;
+            // Chỉ dựng bộ lọc Excel sau khi đã đăng nhập, tránh làm nặng màn hình mở đầu.
+            enhanceExcelFilters();
         }
 
-        async function fetchCatalog() {
-            const { data, error } = await supabaseClient.from('catalog').select('*');
-            if (!error) { catalogData = data || []; renderCatalog(); }
+        function getActiveAppTab() {
+            const bodyClass = [...document.body.classList].find(name => name.startsWith('active-tab-'));
+            return bodyClass ? bodyClass.replace('active-tab-', '') : 'dashboard';
+        }
+
+        async function init() {
+            // Chỉ kiểm tra kết nối ở bước khởi động. Không tải hoặc render dữ liệu
+            // khi màn hình đăng nhập vẫn đang hiển thị.
+            if (!supabaseClient) {
+                updateStatusUI('offline');
+                return;
+            }
+            updateStatusUI(navigator.onLine ? 'online' : 'offline');
+        }
+
+        async function fetchDefects(options = {}) {
+            if (defectsFetchPromise) return defectsFetchPromise;
+
+            defectsFetchPromise = (async () => {
+                const { data, error } = await supabaseClient
+                    .from('defects')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+                defectsData = (data || []).map(item => ({ ...item, status: normalizeDefectStatus(item.status) }));
+
+                // Chỉ render đúng tab đang mở. Không dựng bảng ẩn phía sau.
+                const activeTab = getActiveAppTab();
+                if (activeTab === 'history') {
+                    renderHistory();
+                } else if (activeTab === 'defects') {
+                    renderDashboard();
+                } else if (activeTab === 'dashboard') {
+                    renderDashboardAnalytics();
+                    updateDashboardActiveCards();
+                }
+                updateStatusUI('online');
+                return defectsData;
+            })().catch(error => {
+                console.warn('Không tải được dữ liệu hàng lỗi:', error);
+                updateStatusUI('offline');
+                return defectsData;
+            }).finally(() => {
+                defectsFetchPromise = null;
+            });
+
+            return defectsFetchPromise;
+        }
+
+        async function fetchCatalog(options = {}) {
+            const shouldRender = options.render === true || getActiveAppTab() === 'catalog';
+            const useCache = options.useCache === true;
+
+            if (catalogFetchPromise) {
+                await catalogFetchPromise;
+                if (shouldRender) renderCatalog();
+                return catalogData;
+            }
+            if (catalogLoaded && useCache) {
+                if (shouldRender) renderCatalog();
+                return catalogData;
+            }
+
+            catalogFetchPromise = (async () => {
+                const { data, error } = await supabaseClient.from('catalog').select('*');
+                if (error) throw error;
+                catalogData = data || [];
+                catalogLoaded = true;
+                return catalogData;
+            })().catch(error => {
+                console.warn('Không tải được danh mục:', error);
+                return catalogData;
+            }).finally(() => {
+                catalogFetchPromise = null;
+            });
+
+            await catalogFetchPromise;
+            if (shouldRender) renderCatalog();
+            return catalogData;
+        }
+
+        function scheduleCatalogWarmup() {
+            if (!currentUser || catalogLoaded || catalogFetchPromise) return;
+            const load = () => fetchCatalog({ render: false, useCache: true }).catch(() => {});
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(load, { timeout: 6000 });
+            } else {
+                setTimeout(load, 2500);
+            }
         }
 
         function getCurrentAccountKey() {
@@ -622,7 +722,7 @@ let defectsData = [];
 
         async function sendWebPushForNotification(notification) {
             // Gửi Web Push cho mọi thông báo hàng lỗi, không chỉ thông báo tạo mới.
-            // Trước đây hàm này chặn tất cả type khác defect_created nên đổi trạng thái Đang sửa/Xong
+            // Giữ tương thích với các loại thông báo trạng thái cũ.
             // chỉ hiện trong chuông trong app, không đẩy lên thanh trạng thái điện thoại.
             if (!notification) return;
 
@@ -838,10 +938,11 @@ let defectsData = [];
             }, 10000);
 
             dataPollingTimer = setInterval(() => {
-                if (!currentUser) return;
-                fetchDefects();
-                fetchCatalog();
-                if (isAdmin()) fetchActivityLogs();
+                if (!currentUser || document.hidden) return;
+                const activeTab = getActiveAppTab();
+                if (activeTab === 'dashboard' || activeTab === 'defects' || activeTab === 'history') fetchDefects();
+                if (activeTab === 'catalog') fetchCatalog({ render: true });
+                if (activeTab === 'logs' && isAdmin()) fetchActivityLogs();
             }, 20000);
         }
 
@@ -1096,17 +1197,24 @@ let defectsData = [];
             }).join('');
         }
 
+        function syncNotificationPanelState(isOpen) {
+            document.body.classList.toggle('notification-panel-open', !!isOpen);
+        }
+
         function toggleNotificationsPanel() {
             const panel = document.getElementById('notification-panel');
             if (!panel) return;
 
-            panel.classList.toggle('hidden');
-            fetchNotifications();
+            const willOpen = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden', !willOpen);
+            syncNotificationPanelState(willOpen);
+            if (willOpen) fetchNotifications();
         }
 
         function closeNotificationsPanel() {
             const panel = document.getElementById('notification-panel');
             if (panel) panel.classList.add('hidden');
+            syncNotificationPanelState(false);
         }
 
         function markNotificationRead(id) {
@@ -1142,8 +1250,8 @@ let defectsData = [];
             }
 
             if (type === 'defect_fixing') {
-                title = 'Hàng lỗi đang sửa';
-                message = `${actorName} đã cập nhật trạng thái Đang sửa cho: ${defect.product_name || 'N/A'}`;
+                title = 'Hàng lỗi chờ xử lý';
+                message = `${actorName} đã cập nhật trạng thái Chờ xử lý cho: ${defect.product_name || 'N/A'}`;
             }
 
             if (type === 'defect_resolved') {
@@ -1239,18 +1347,28 @@ let defectsData = [];
 
 
         // Nâng cấp quyền tab: dùng một hàm trung tâm cho bottom nav, side menu và vuốt tab.
+        function getDefaultLandingTab() {
+            return isAdmin() ? 'dashboard' : 'defects';
+        }
+
         function getAllowedTabs() {
             const role = currentRole || 'staff';
-            const isMobile = window.innerWidth <= 768;
-            const tabs = ['dashboard', 'defects', 'history'];
+            const tabs = [];
 
+            // Đồng bộ PC/Mobile theo quyền tài khoản.
+            if (role === 'admin') tabs.push('dashboard');
+            tabs.push('defects', 'history');
             if (role === 'admin' || role === 'po') tabs.push('catalog');
-            if (role === 'admin' || isMobile) tabs.push('users');
+
+            // Tab Tài khoản vẫn có trong danh sách để mobile dùng cho mọi vai trò.
+            // Trên PC, applyPermissionUI() sẽ chỉ hiển thị tab này cho admin.
+            tabs.push('users');
             if (role === 'admin') tabs.push('logs');
 
             return tabs;
         }
 
+        window.getDefaultLandingTab = getDefaultLandingTab;
         window.getAllowedTabs = getAllowedTabs;
 
 		function updateHelloUser() {
@@ -1907,212 +2025,7 @@ let defectsData = [];
             return 'Mới tạo';
         }
 
-        function renderDashboardAnalytics() {
-            const periodSelect = document.getElementById('dashboard-period');
-            if (!periodSelect) return;
-
-            const config = getDashboardPeriodConfig();
-            const rows = getDashboardPeriodRows(config, 0);
-            const previousRows = config.value === 'all' ? [] : getDashboardPeriodRows(config, 1);
-            const totalReports = rows.length;
-            const totalQuantity = sumDashboardQuantity(rows);
-            const pendingRows = rows.filter(item => item.status === 'Pending');
-            const fixingRows = rows.filter(item => item.status === 'Fixing');
-            const resolvedRows = rows.filter(item => item.status === 'Resolved');
-            const unresolvedRows = rows.filter(item => item.status !== 'Resolved');
-            const completionRate = dashboardPercent(resolvedRows.length, totalReports);
-
-            setDashboardText('stat-total', totalQuantity.toLocaleString('vi-VN'));
-            setDashboardText('stat-pending', pendingRows.length.toLocaleString('vi-VN'));
-            setDashboardText('stat-fixing', fixingRows.length.toLocaleString('vi-VN'));
-            setDashboardText('stat-resolved', resolvedRows.length.toLocaleString('vi-VN'));
-            setDashboardText('dashboard-total-reports', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
-            setDashboardText('dashboard-pending-share', `${dashboardPercent(pendingRows.length, totalReports)}% tổng báo cáo`);
-            setDashboardText('dashboard-fixing-share', `${dashboardPercent(fixingRows.length, totalReports)}% tổng báo cáo`);
-            setDashboardText('dashboard-completion-rate', `${completionRate}% tỷ lệ hoàn thành`);
-            setDashboardText('dashboard-donut-rate', `${completionRate}%`);
-            setDashboardText('dashboard-trend-total', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
-
-            const caption = document.getElementById('dashboard-period-caption');
-            if (caption) {
-                caption.textContent = config.value === 'all'
-                    ? 'Theo dõi toàn bộ dữ liệu hàng lỗi. Biểu đồ xu hướng hiển thị 12 tháng gần nhất.'
-                    : `Theo dõi tình trạng hàng lỗi trong ${config.label}.`;
-            }
-
-            const today = new Date();
-            const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
-            const todayCount = defectsData.filter(item => {
-                const date = getValidDashboardDate(item.created_at);
-                return date && `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` === todayKey;
-            }).length;
-            setDashboardText('dashboard-today-count', `Hôm nay: ${todayCount} mới`);
-
-            const oldestOpen = unresolvedRows
-                .map(item => getValidDashboardDate(item.created_at))
-                .filter(Boolean)
-                .sort((a, b) => a - b)[0];
-            setDashboardText(
-                'dashboard-oldest-open',
-                oldestOpen ? `Tồn lâu nhất: ${formatDashboardAge(oldestOpen)}` : 'Không có tồn đọng'
-            );
-
-            const trendElement = document.getElementById('dashboard-total-trend');
-            if (trendElement) {
-                if (config.value === 'all') {
-                    trendElement.className = 'dashboard-trend neutral';
-                    trendElement.innerHTML = '<i class="fas fa-database"></i> Toàn bộ dữ liệu';
-                } else {
-                    const previousQuantity = sumDashboardQuantity(previousRows);
-                    if (previousQuantity === 0 && totalQuantity === 0) {
-                        trendElement.className = 'dashboard-trend neutral';
-                        trendElement.innerHTML = '<i class="fas fa-minus"></i> Không đổi';
-                    } else if (previousQuantity === 0) {
-                        trendElement.className = 'dashboard-trend down';
-                        trendElement.innerHTML = '<i class="fas fa-arrow-up"></i> Phát sinh mới';
-                    } else {
-                        const difference = Math.round(((totalQuantity - previousQuantity) / previousQuantity) * 100);
-                        if (difference > 0) {
-                            trendElement.className = 'dashboard-trend down';
-                            trendElement.innerHTML = `<i class="fas fa-arrow-up"></i> +${Math.abs(difference)}% so kỳ trước`;
-                        } else if (difference < 0) {
-                            trendElement.className = 'dashboard-trend up';
-                            trendElement.innerHTML = `<i class="fas fa-arrow-down"></i> -${Math.abs(difference)}% so kỳ trước`;
-                        } else {
-                            trendElement.className = 'dashboard-trend neutral';
-                            trendElement.innerHTML = '<i class="fas fa-minus"></i> Không đổi';
-                        }
-                    }
-                }
-            }
-
-            const trendContainer = document.getElementById('dashboard-trend-bars');
-            if (trendContainer) {
-                const trendSource = config.value === 'all'
-                    ? defectsData.filter(item => {
-                        const date = getValidDashboardDate(item.created_at);
-                        return date && date.getTime() >= Date.now() - 365 * 86400000;
-                    })
-                    : rows;
-                const buckets = getDashboardTrendBuckets(trendSource, config);
-                const maxCount = Math.max(1, ...buckets.map(bucket => bucket.count));
-                trendContainer.innerHTML = buckets.map(bucket => {
-                    const height = bucket.count ? Math.max(9, Math.round((bucket.count / maxCount) * 100)) : 3;
-                    return `
-                        <div class="dashboard-bar-item" title="${bucket.count} báo cáo, số lượng ${bucket.quantity}">
-                            <div class="dashboard-bar-track">
-                                <div class="dashboard-bar" style="height:${height}%">
-                                    <span class="dashboard-bar-value">${bucket.count}</span>
-                                </div>
-                            </div>
-                            <span class="dashboard-bar-label">${escapeHtml(bucket.label)}</span>
-                        </div>`;
-                }).join('');
-            }
-
-            const pendingPercent = dashboardPercent(pendingRows.length, totalReports);
-            const fixingPercent = dashboardPercent(fixingRows.length, totalReports);
-            const resolvedPercent = dashboardPercent(resolvedRows.length, totalReports);
-            const donut = document.getElementById('dashboard-status-donut');
-            if (donut) {
-                const pendingEnd = pendingPercent;
-                const fixingEnd = Math.min(100, pendingEnd + fixingPercent);
-                const resolvedEnd = Math.min(100, fixingEnd + resolvedPercent);
-                donut.style.setProperty(
-                    '--dashboard-donut-bg',
-                    totalReports
-                        ? `conic-gradient(#f59e0b 0 ${pendingEnd}%, #f97316 ${pendingEnd}% ${fixingEnd}%, #22c55e ${fixingEnd}% ${resolvedEnd}%, #e2e8f0 ${resolvedEnd}% 100%)`
-                        : 'conic-gradient(#e2e8f0 0 100%)'
-                );
-            }
-
-            const legend = document.getElementById('dashboard-status-legend');
-            if (legend) {
-                const legendRows = [
-                    { label: 'Chờ xử lý', count: pendingRows.length, color: '#f59e0b' },
-                    { label: 'Đang sửa', count: fixingRows.length, color: '#f97316' },
-                    { label: 'Đã xong', count: resolvedRows.length, color: '#22c55e' }
-                ];
-                legend.innerHTML = legendRows.map(item => `
-                    <div class="dashboard-legend-row">
-                        <span class="dashboard-legend-dot" style="background:${item.color}"></span>
-                        <span>${item.label}</span>
-                        <strong>${item.count}</strong>
-                    </div>`).join('');
-            }
-
-            const vendors = new Map();
-            rows.forEach(item => {
-                const vendorName = String(item.vendor_name || '').trim();
-                const vendorId = String(item.vendor_id || '').trim();
-                const key = `${vendorId}__${vendorName}` || 'unknown';
-                const current = vendors.get(key) || {
-                    name: vendorName || 'Chưa xác định NCC',
-                    id: vendorId || '',
-                    reports: 0,
-                    quantity: 0
-                };
-                current.reports += 1;
-                current.quantity += Number(item.quantity) || 0;
-                vendors.set(key, current);
-            });
-
-            const topVendors = [...vendors.values()]
-                .sort((a, b) => b.reports - a.reports || b.quantity - a.quantity)
-                .slice(0, 5);
-            const vendorContainer = document.getElementById('dashboard-top-vendors');
-            if (vendorContainer) {
-                if (!topVendors.length) {
-                    vendorContainer.innerHTML = '<div class="dashboard-empty"><i class="fas fa-building-circle-exclamation"></i><span>Chưa có dữ liệu nhà cung cấp trong kỳ này.</span></div>';
-                } else {
-                    const maxVendorReports = Math.max(1, ...topVendors.map(item => item.reports));
-                    vendorContainer.innerHTML = topVendors.map((item, index) => `
-                        <div class="dashboard-vendor-row">
-                            <span class="dashboard-rank">${index + 1}</span>
-                            <div class="dashboard-vendor-main">
-                                <div class="dashboard-vendor-name">
-                                    <span title="${escapeHtmlAttr(item.name)}">${escapeHtml(item.name)}</span>
-                                    <span>${item.reports} báo cáo</span>
-                                </div>
-                                <div class="dashboard-vendor-progress"><span style="width:${Math.max(8, Math.round((item.reports / maxVendorReports) * 100))}%"></span></div>
-                            </div>
-                            <span class="dashboard-vendor-total">SL ${item.quantity}</span>
-                        </div>`).join('');
-                }
-            }
-
-            const severityRank = { High: 3, Medium: 2, Low: 1 };
-            const priorityRows = unresolvedRows
-                .sort((a, b) => {
-                    const severityDifference = (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0);
-                    if (severityDifference) return severityDifference;
-                    const aDate = getValidDashboardDate(a.created_at)?.getTime() || Date.now();
-                    const bDate = getValidDashboardDate(b.created_at)?.getTime() || Date.now();
-                    return aDate - bDate;
-                })
-                .slice(0, 5);
-
-            setDashboardText('dashboard-priority-count', `${unresolvedRows.length} mục`);
-            const priorityContainer = document.getElementById('dashboard-priority-list');
-            if (priorityContainer) {
-                if (!priorityRows.length) {
-                    priorityContainer.innerHTML = '<div class="dashboard-empty"><i class="fas fa-circle-check"></i><span>Không có hàng lỗi tồn đọng trong kỳ này.</span></div>';
-                } else {
-                    priorityContainer.innerHTML = priorityRows.map(item => `
-                        <button type="button" class="dashboard-priority-item" onclick="openStatusModal('${escapeJsString(item.id)}')">
-                            <span class="dashboard-priority-icon"><i class="fas fa-triangle-exclamation"></i></span>
-                            <span class="dashboard-priority-copy">
-                                <span class="dashboard-priority-name">${escapeHtml(item.product_name || 'Sản phẩm chưa có tên')}</span>
-                                <span class="dashboard-priority-meta">${escapeHtml(item.vendor_name || 'Chưa có NCC')} · ITEM ${escapeHtml(item.sku || 'N/A')}</span>
-                            </span>
-                            <span class="dashboard-priority-age">
-                                <span>${formatDashboardAge(item.created_at)}</span>
-                                <span class="dashboard-priority-status ${getStatusClass(item.status)}">${getStatusText(item.status)}</span>
-                            </span>
-                        </button>`).join('');
-                }
-            }
-        }
+        
 
         function renderDashboard() {
             renderDashboardAnalytics();
@@ -2831,8 +2744,7 @@ let defectsData = [];
 					const statusText = String(row["Trạng thái"] || row.Status || "Pending").trim();
 
 					let status = "Pending";
-					if (statusText === "Đang sửa" || statusText === "Fixing") status = "Fixing";
-					if (statusText === "Xong" || statusText === "Resolved" || statusText === "Đã hoàn thành") status = "Resolved";
+					if (statusText === "Xong" || statusText === "Resolved" || statusText === "Đã hoàn thành" || statusText === "Hoàn thành") status = "Resolved";
 
 					return {
 						barcode: String(row["Barcode"] || row["Mã vạch"] || "").trim(),
@@ -2907,6 +2819,7 @@ let defectsData = [];
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closePasswordPopup();
+                closeNotificationsPanel();
                 toggleSideMenu(false);
                 toggleUserMenu(false);
             }
@@ -2930,22 +2843,26 @@ let defectsData = [];
 				updateBodyRoleClass();
 			}
 
-			if (tab === 'catalog' && !canManageData()) {
-				if (!silent) window.showToast("Bạn không có quyền truy cập danh mục hàng hóa.");
-				tab = 'dashboard';
+			if (tab === 'dashboard' && !isAdmin()) {
+				if (!silent) window.showToast("Chỉ admin mới được xem Dashboard.");
+				tab = getDefaultLandingTab();
 			}
 
-			if (tab === 'users' && !isAdmin()) {
-				const isMobileAccountTab = window.innerWidth <= 768;
-				if (!isMobileAccountTab) {
-					if (!silent) window.showToast("Bạn không có quyền truy cập quản lý tài khoản.");
-					tab = 'dashboard';
-				}
+			if (tab === 'catalog' && !canManageData()) {
+				if (!silent) window.showToast("Bạn không có quyền truy cập danh mục hàng hóa.");
+				tab = getDefaultLandingTab();
+			}
+
+			// Trên PC chỉ admin được mở tab Tài khoản. PO/nhân viên vẫn dùng tab này trên mobile.
+			const isDesktopViewport = window.matchMedia('(min-width: 769px)').matches;
+			if (tab === 'users' && !isAdmin() && isDesktopViewport) {
+				if (!silent) window.showToast('Tab Tài khoản chỉ hiển thị trên mobile.');
+				tab = getDefaultLandingTab();
 			}
 
 			if (tab === 'logs' && !isAdmin()) {
 				if (!silent) window.showToast("Chỉ admin mới được xem nhật ký hoạt động.");
-				tab = 'dashboard';
+				tab = getDefaultLandingTab();
 			}
 
             document.body.classList.remove('active-tab-dashboard', 'active-tab-defects', 'active-tab-history', 'active-tab-catalog', 'active-tab-users', 'active-tab-logs');
@@ -2959,7 +2876,7 @@ let defectsData = [];
 			toggleHidden('view-users', tab !== 'users');
 			toggleHidden('view-logs', tab !== 'logs');
 
-			if (tab === 'users' && window.innerWidth <= 768 && !isAdmin()) {
+			if (tab === 'users' && !isAdmin()) {
 				setTimeout(() => switchAccountSubTab('personal'), 0);
 			}
 
@@ -2980,12 +2897,27 @@ let defectsData = [];
 			toggleClass('tab-logs', 'text-slate-500', tab !== 'logs');
 				
 			if (tab === 'users') {
-				fetchUsers();
+				if (isAdmin()) {
+					fetchUsers();
+					switchAccountSubTab('manage');
+				} else {
+					switchAccountSubTab('personal');
+				}
 			}
 
 			if (tab === 'logs') {
 				fetchActivityLogs();
 			}
+
+            if (currentUser) {
+                if (tab === 'dashboard' || tab === 'defects') {
+                    requestAnimationFrame(() => renderDashboard());
+                } else if (tab === 'history') {
+                    requestAnimationFrame(() => renderHistory());
+                } else if (tab === 'catalog') {
+                    fetchCatalog({ render: true, useCache: true });
+                }
+            }
 			
 			['dashboard', 'defects', 'history', 'catalog', 'users', 'logs'].forEach(name => {
 				const el = document.getElementById(`m-tab-${name}`);
@@ -3003,6 +2935,10 @@ let defectsData = [];
                 if (!el) return;
                 el.classList.toggle('active', tab === name);
             });
+
+            if (typeof window.refreshMobileNavigation === 'function') {
+                window.refreshMobileNavigation();
+            }
 		};
 
         window.toggleModal = (id, show) => {
@@ -3042,6 +2978,93 @@ let defectsData = [];
 		// Gallery xem ảnh lỗi: ảnh lớn phía trên, thumbnail toàn bộ ảnh bên dưới.
 		let defectImageGalleryUrls = [];
 		let defectImageGalleryIndex = 0;
+		const defectImageGalleryZoom = {
+			scale: 1,
+			x: 0,
+			y: 0,
+			minScale: 1,
+			maxScale: 4
+		};
+
+		function clampGalleryZoom(value, min, max) {
+			return Math.min(max, Math.max(min, value));
+		}
+
+		function getDefectGalleryZoomElements() {
+			return {
+				stage: document.querySelector('.image-gallery-stage[data-gallery-swipe="true"]'),
+				img: document.getElementById('full-res-image'),
+				indicator: document.getElementById('image-gallery-zoom')
+			};
+		}
+
+		function clampDefectImageGalleryPan() {
+			const { stage, img } = getDefectGalleryZoomElements();
+			if (!stage || !img) return;
+
+			const imageWidth = img.clientWidth || 0;
+			const imageHeight = img.clientHeight || 0;
+			const stageWidth = stage.clientWidth || 0;
+			const stageHeight = stage.clientHeight || 0;
+			const maxX = Math.max(0, (imageWidth * defectImageGalleryZoom.scale - stageWidth) / 2);
+			const maxY = Math.max(0, (imageHeight * defectImageGalleryZoom.scale - stageHeight) / 2);
+
+			defectImageGalleryZoom.x = clampGalleryZoom(defectImageGalleryZoom.x, -maxX, maxX);
+			defectImageGalleryZoom.y = clampGalleryZoom(defectImageGalleryZoom.y, -maxY, maxY);
+		}
+
+		function applyDefectImageGalleryZoom() {
+			const { stage, img, indicator } = getDefectGalleryZoomElements();
+			if (!stage || !img) return;
+			clampDefectImageGalleryPan();
+			img.style.transform = `translate3d(${defectImageGalleryZoom.x}px, ${defectImageGalleryZoom.y}px, 0) scale(${defectImageGalleryZoom.scale})`;
+			const zoomed = defectImageGalleryZoom.scale > 1.01;
+			stage.classList.toggle('is-zoomed', zoomed);
+			if (indicator) {
+				indicator.textContent = `${Math.round(defectImageGalleryZoom.scale * 100)}%`;
+				indicator.classList.toggle('is-visible', zoomed);
+			}
+		}
+
+		function resetDefectImageGalleryZoom(animate = false) {
+			const { stage } = getDefectGalleryZoomElements();
+			if (stage) {
+				stage.classList.remove('is-interacting');
+				stage.classList.toggle('is-zoom-animating', !!animate);
+			}
+			defectImageGalleryZoom.scale = 1;
+			defectImageGalleryZoom.x = 0;
+			defectImageGalleryZoom.y = 0;
+			applyDefectImageGalleryZoom();
+			if (stage && animate) {
+				setTimeout(() => stage.classList.remove('is-zoom-animating'), 220);
+			}
+		}
+
+		function setDefectImageGalleryZoomAtPoint(nextScale, clientX, clientY, animate = false) {
+			const { stage } = getDefectGalleryZoomElements();
+			if (!stage) return;
+			const rect = stage.getBoundingClientRect();
+			const relX = clientX - (rect.left + rect.width / 2);
+			const relY = clientY - (rect.top + rect.height / 2);
+			const oldScale = defectImageGalleryZoom.scale || 1;
+			const imagePointX = (relX - defectImageGalleryZoom.x) / oldScale;
+			const imagePointY = (relY - defectImageGalleryZoom.y) / oldScale;
+			const scale = clampGalleryZoom(nextScale, defectImageGalleryZoom.minScale, defectImageGalleryZoom.maxScale);
+
+			stage.classList.toggle('is-zoom-animating', !!animate);
+			defectImageGalleryZoom.scale = scale;
+			if (scale <= 1.01) {
+				defectImageGalleryZoom.scale = 1;
+				defectImageGalleryZoom.x = 0;
+				defectImageGalleryZoom.y = 0;
+			} else {
+				defectImageGalleryZoom.x = relX - imagePointX * scale;
+				defectImageGalleryZoom.y = relY - imagePointY * scale;
+			}
+			applyDefectImageGalleryZoom();
+			if (animate) setTimeout(() => stage.classList.remove('is-zoom-animating'), 220);
+		}
 
 		function getSafeGalleryUrls(urls) {
 			return (Array.isArray(urls) ? urls : [urls])
@@ -3060,6 +3083,7 @@ let defectsData = [];
 			const total = defectImageGalleryUrls.length;
 
 			if (!img || !downloadLink) return;
+			resetDefectImageGalleryZoom(false);
 
 			if (!total) {
 				img.src = '';
@@ -3074,6 +3098,7 @@ let defectsData = [];
 			const currentUrl = defectImageGalleryUrls[defectImageGalleryIndex];
 			img.src = currentUrl;
 			img.alt = `Ảnh lỗi ${defectImageGalleryIndex + 1}/${total}`;
+			img.draggable = false;
 			downloadLink.href = currentUrl;
 			downloadLink.setAttribute('download', `defect_${defectImageGalleryIndex + 1}_${Date.now()}.jpg`);
 
@@ -3105,16 +3130,202 @@ let defectsData = [];
 			updateDefectImageGallery();
 		}
 
-		function prevDefectImage() {
+		function releaseGalleryNavState(triggerButton) {
+			const button = triggerButton instanceof HTMLElement
+				? triggerButton
+				: document.activeElement?.closest?.('.image-gallery-nav');
+			if (!button) return;
+			button.classList.remove('is-pressed');
+			requestAnimationFrame(() => button.blur?.());
+		}
+
+		function prevDefectImage(triggerButton = null) {
 			if (!defectImageGalleryUrls.length) return;
 			defectImageGalleryIndex = (defectImageGalleryIndex - 1 + defectImageGalleryUrls.length) % defectImageGalleryUrls.length;
 			updateDefectImageGallery();
+			releaseGalleryNavState(triggerButton);
 		}
 
-		function nextDefectImage() {
+		function nextDefectImage(triggerButton = null) {
 			if (!defectImageGalleryUrls.length) return;
 			defectImageGalleryIndex = (defectImageGalleryIndex + 1) % defectImageGalleryUrls.length;
 			updateDefectImageGallery();
+			releaseGalleryNavState(triggerButton);
+		}
+
+		function setupDefectImageGallerySwipe() {
+			const stage = document.querySelector('.image-gallery-stage[data-gallery-swipe="true"]');
+			if (!stage || stage.dataset.swipeReady === 'true') return;
+			stage.dataset.swipeReady = 'true';
+
+			const pointers = new Map();
+			let gestureMode = 'idle';
+			let gestureHadMultiplePointers = false;
+			let startPointer = null;
+			let startPanX = 0;
+			let startPanY = 0;
+			let startTime = 0;
+			let pinchStartDistance = 0;
+			let pinchStartScale = 1;
+			let pinchAnchorX = 0;
+			let pinchAnchorY = 0;
+			let lastTap = { time: 0, x: 0, y: 0 };
+
+			const getTwoPointers = () => [...pointers.values()].slice(0, 2);
+			const distanceBetween = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+			const centerBetween = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+			const beginSingleGesture = point => {
+				gestureMode = defectImageGalleryZoom.scale > 1.01 ? 'pan' : 'swipe';
+				startPointer = { x: point.x, y: point.y };
+				startPanX = defectImageGalleryZoom.x;
+				startPanY = defectImageGalleryZoom.y;
+				startTime = Date.now();
+			};
+
+			const beginPinchGesture = () => {
+				const [a, b] = getTwoPointers();
+				if (!a || !b) return;
+				const rect = stage.getBoundingClientRect();
+				const center = centerBetween(a, b);
+				const relX = center.x - (rect.left + rect.width / 2);
+				const relY = center.y - (rect.top + rect.height / 2);
+				pinchStartDistance = Math.max(1, distanceBetween(a, b));
+				pinchStartScale = defectImageGalleryZoom.scale;
+				pinchAnchorX = (relX - defectImageGalleryZoom.x) / pinchStartScale;
+				pinchAnchorY = (relY - defectImageGalleryZoom.y) / pinchStartScale;
+				gestureMode = 'pinch';
+				gestureHadMultiplePointers = true;
+			};
+
+			const handleTap = (x, y) => {
+				const now = Date.now();
+				const isDoubleTap = now - lastTap.time < 330 && Math.hypot(x - lastTap.x, y - lastTap.y) < 44;
+				if (isDoubleTap) {
+					lastTap = { time: 0, x: 0, y: 0 };
+					stage.classList.remove('is-interacting');
+					if (defectImageGalleryZoom.scale > 1.01) {
+						resetDefectImageGalleryZoom(true);
+					} else {
+						setDefectImageGalleryZoomAtPoint(2.5, x, y, true);
+					}
+				} else {
+					lastTap = { time: now, x, y };
+				}
+			};
+
+			const finishPointer = event => {
+				const point = pointers.get(event.pointerId);
+				if (!point) return;
+				const dx = startPointer ? point.x - startPointer.x : 0;
+				const dy = startPointer ? point.y - startPointer.y : 0;
+				const elapsed = Date.now() - startTime;
+				const wasSinglePointer = pointers.size === 1;
+
+				pointers.delete(event.pointerId);
+				try { stage.releasePointerCapture?.(event.pointerId); } catch (_) {}
+
+				if (pointers.size >= 2) {
+					beginPinchGesture();
+					return;
+				}
+				if (pointers.size === 1) {
+					const remaining = [...pointers.values()][0];
+					beginSingleGesture(remaining);
+					gestureMode = defectImageGalleryZoom.scale > 1.01 ? 'pan' : 'swipe';
+					return;
+				}
+
+				stage.classList.remove('is-interacting', 'is-swiping');
+				if (defectImageGalleryZoom.scale < 1.05) resetDefectImageGalleryZoom(true);
+				else applyDefectImageGalleryZoom();
+
+				if (wasSinglePointer && !gestureHadMultiplePointers) {
+					const movement = Math.hypot(dx, dy);
+					if (defectImageGalleryZoom.scale <= 1.01 && elapsed <= 800 && Math.abs(dx) >= 46 && Math.abs(dx) >= Math.abs(dy) * 1.15) {
+						if (defectImageGalleryUrls.length > 1) {
+							if (dx < 0) nextDefectImage();
+							else prevDefectImage();
+						}
+					} else if (movement < 14 && elapsed < 320) {
+						handleTap(point.x, point.y);
+					}
+				}
+
+				gestureMode = 'idle';
+				gestureHadMultiplePointers = false;
+				startPointer = null;
+			};
+
+			stage.addEventListener('dragstart', event => event.preventDefault());
+
+			stage.addEventListener('pointerdown', event => {
+				if (event.pointerType === 'mouse' && event.button !== 0) return;
+				if (event.target.closest('button, a')) return;
+				if (pointers.size === 0) gestureHadMultiplePointers = false;
+				pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+				try { stage.setPointerCapture?.(event.pointerId); } catch (_) {}
+				stage.classList.add('is-interacting');
+				if (pointers.size === 1) beginSingleGesture({ x: event.clientX, y: event.clientY });
+				else beginPinchGesture();
+				event.preventDefault();
+			}, { passive: false });
+
+			stage.addEventListener('pointermove', event => {
+				if (!pointers.has(event.pointerId)) return;
+				pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+				if (pointers.size >= 2) {
+					if (gestureMode !== 'pinch') beginPinchGesture();
+					const [a, b] = getTwoPointers();
+					const currentDistance = Math.max(1, distanceBetween(a, b));
+					const currentCenter = centerBetween(a, b);
+					const rect = stage.getBoundingClientRect();
+					const relX = currentCenter.x - (rect.left + rect.width / 2);
+					const relY = currentCenter.y - (rect.top + rect.height / 2);
+					const nextScale = clampGalleryZoom(pinchStartScale * (currentDistance / pinchStartDistance), defectImageGalleryZoom.minScale, defectImageGalleryZoom.maxScale);
+					defectImageGalleryZoom.scale = nextScale;
+					defectImageGalleryZoom.x = relX - pinchAnchorX * nextScale;
+					defectImageGalleryZoom.y = relY - pinchAnchorY * nextScale;
+					applyDefectImageGalleryZoom();
+				} else if (pointers.size === 1 && startPointer) {
+					const point = [...pointers.values()][0];
+					const dx = point.x - startPointer.x;
+					const dy = point.y - startPointer.y;
+					if (defectImageGalleryZoom.scale > 1.01) {
+						gestureMode = 'pan';
+						defectImageGalleryZoom.x = startPanX + dx;
+						defectImageGalleryZoom.y = startPanY + dy;
+						applyDefectImageGalleryZoom();
+					} else {
+						gestureMode = 'swipe';
+						stage.classList.toggle('is-swiping', Math.abs(dx) > 8);
+					}
+				}
+				event.preventDefault();
+			}, { passive: false });
+
+			stage.addEventListener('pointerup', finishPointer, { passive: true });
+			stage.addEventListener('pointercancel', finishPointer, { passive: true });
+
+			stage.addEventListener('dblclick', event => {
+				if (event.target.closest('button, a')) return;
+				event.preventDefault();
+				if (defectImageGalleryZoom.scale > 1.01) resetDefectImageGalleryZoom(true);
+				else setDefectImageGalleryZoomAtPoint(2.5, event.clientX, event.clientY, true);
+			});
+
+			stage.addEventListener('wheel', event => {
+				if (document.getElementById('modal-image')?.classList.contains('hidden')) return;
+				if (event.target.closest('button, a')) return;
+				event.preventDefault();
+				const factor = event.deltaY < 0 ? 1.16 : 0.86;
+				setDefectImageGalleryZoomAtPoint(defectImageGalleryZoom.scale * factor, event.clientX, event.clientY, false);
+			}, { passive: false });
+
+			window.addEventListener('resize', () => {
+				if (!document.getElementById('modal-image')?.classList.contains('hidden')) applyDefectImageGalleryZoom();
+			}, { passive: true });
 		}
 
 		// Giữ hàm cũ để các chỗ onclick cũ không bị lỗi.
@@ -3129,9 +3340,12 @@ let defectsData = [];
 			if (show) {
 				modal.classList.remove('hidden');
 				document.body.classList.add('image-modal-open');
+				setupDefectImageGallerySwipe();
+				document.querySelectorAll('.image-gallery-nav').forEach(button => button.blur?.());
 			} else {
 				modal.classList.add('hidden');
 				document.body.classList.remove('image-modal-open');
+				resetDefectImageGalleryZoom(false);
 				const img = document.getElementById('full-res-image');
 				if (img) img.src = '';
 			}
@@ -3151,7 +3365,7 @@ let defectsData = [];
 		}
 
         const getSevClass = (s) => ({'High':'text-red-700 bg-red-50 border-red-200','Medium':'text-yellow-700 bg-yellow-50 border-yellow-200','Low':'text-blue-700 bg-blue-50 border-blue-200'}[s] || 'text-slate-700 bg-slate-50 border-slate-200');
-        const getStatusClass = (s) => ({'Resolved':'bg-green-100 text-green-800 border-green-200','Fixing':'bg-orange-100 text-orange-800 border-orange-200','Pending':'bg-yellow-100 text-yellow-800 border-yellow-200'}[s] || 'bg-slate-50');
+        const getStatusClass = (s) => normalizeDefectStatus(s) === 'Resolved' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200';
 
         const updateStats = () => {
             renderDashboardAnalytics();
@@ -3537,7 +3751,7 @@ let defectsData = [];
 				"Tên NCC": d.vendor_name || '',
 				"Loại lỗi": d.defect_type || '',
 				"Mức độ": d.severity || '',
-				"Trạng thái": d.status === 'Pending' ? 'Chờ xử lý' : (d.status === 'Fixing' ? 'Đang sửa' : 'Xong'),
+				"Trạng thái": getStatusText(d.status),
 				"Link hình ảnh": getDefectImageUrls(d).join("\n")
 			}));
 
@@ -3590,6 +3804,14 @@ let defectsData = [];
 		}
 
 		let loginInProgress = false;
+
+		function activateDashboardAfterSessionReady() {
+			if (typeof window.switchTab === 'function') {
+				window.switchTab(getDefaultLandingTab(), { silent: true });
+			}
+			requestAnimationFrame(() => window.refreshMobileNavigation?.());
+			setTimeout(() => window.refreshMobileNavigation?.(), 120);
+		}
 
 		async function loginApp() {
 			if (loginInProgress) return;
@@ -3647,13 +3869,12 @@ let defectsData = [];
 				updateAppLoading('Đang mở giao diện...', 'Đang tải dữ liệu theo quyền tài khoản');
 				document.getElementById('login-screen').classList.add('hidden');
 				applyPermissionUI();
-				await Promise.all([fetchDefects(), fetchCatalog()]);
-				await fetchUsers();
-				if (isAdmin()) await fetchActivityLogs();
+                initializePostLoginFeatures();
+				activateDashboardAfterSessionReady();
+				await fetchDefects();
+                scheduleCatalogWarmup();
 				await refreshNotificationsAfterLogin();
 				await createActivityLog('login', 'session', null, `${currentDisplayName} đăng nhập hệ thống`, { mode, username });
-				renderDashboard();
-				renderHistory();
 			} catch (error) {
 				loginError.innerText = 'Không đăng nhập được: ' + (error?.message || 'Lỗi kết nối hệ thống');
 				loginError.classList.remove('hidden');
@@ -3704,6 +3925,13 @@ let defectsData = [];
 			}
 		}
 
+        function withStartupTimeout(promise, timeoutMs, fallbackValue) {
+            return Promise.race([
+                promise,
+                new Promise(resolve => setTimeout(() => resolve(fallbackValue), timeoutMs))
+            ]);
+        }
+
 		async function checkLogin() {
 			showAppLoading('Đang kiểm tra phiên đăng nhập...', 'Đang khôi phục phiên làm việc nếu có');
 			try {
@@ -3720,17 +3948,16 @@ let defectsData = [];
 						updateHelloUser();
 						document.getElementById('login-screen').classList.add('hidden');
 						applyPermissionUI();
-						await Promise.all([fetchDefects(), fetchCatalog()]);
-						await fetchUsers();
-						if (isAdmin()) await fetchActivityLogs();
+                        initializePostLoginFeatures();
+						activateDashboardAfterSessionReady();
+						await fetchDefects();
+                        scheduleCatalogWarmup();
 						await refreshNotificationsAfterLogin();
-						renderDashboard();
-						renderHistory();
 						return;
 					}
 				}
 
-				const { data } = await supabaseClient.auth.getSession();
+				const { data } = await withStartupTimeout(supabaseClient.auth.getSession(), 8000, { data: { session: null } });
 
 				if (data.session) {
 					currentUser = data.session.user;
@@ -3740,12 +3967,11 @@ let defectsData = [];
 					updateHelloUser();
 					document.getElementById('login-screen').classList.add('hidden');
 					applyPermissionUI();
-					await Promise.all([fetchDefects(), fetchCatalog()]);
-					await fetchUsers();
-					if (isAdmin()) await fetchActivityLogs();
+                    initializePostLoginFeatures();
+					activateDashboardAfterSessionReady();
+					await fetchDefects();
+                    scheduleCatalogWarmup();
 					await refreshNotificationsAfterLogin();
-					renderDashboard();
-					renderHistory();
 				} else {
 					document.getElementById('login-screen').classList.remove('hidden');
 				}
@@ -3759,71 +3985,17 @@ let defectsData = [];
 			}
 		}
 
-		function getStatusText(status) {
-			if (status === 'Pending') return 'Chờ xử lý';
-			if (status === 'Fixing') return 'Đang sửa';
-			if (status === 'Resolved') return 'Xong';
-			return 'Chờ xử lý';
-		}
+		function normalizeDefectStatus(status) {
+    return String(status || '').trim() === 'Resolved' ? 'Resolved' : 'Pending';
+}
 
-		function openStatusModal(id) {
+function getStatusText(status) {
+    return normalizeDefectStatus(status) === 'Resolved' ? 'Hoàn thành' : 'Chờ xử lý';
+}
 
-			const defect = defectsData.find(d => d.id == id);
+		
 
-			if (!defect) return;
 
-			document.getElementById('status-defect-id').value = id;
-
-			document.getElementById('status-product-name').innerText =
-				defect.product_name || 'N/A';
-
-			document.getElementById('status-sku').innerText =
-				defect.sku || '-';
-
-			document.getElementById('status-barcode').innerText =
-				defect.barcode || '-';
-
-			document.getElementById('status-date').innerText =
-				formatDateTime(defect.created_at);
-
-			toggleModal('modal-status', true);
-		}
-
-		async function saveStatus(status) {
-			const id = document.getElementById('status-defect-id').value;
-
-			if (!id) return;
-
-			const currentDefect = defectsData.find(d => d.id == id) || {};
-
-			const { data: updatedDefect, error } = await supabaseClient
-				.from('defects')
-				.update({ status })
-				.eq('id', id)
-				.select()
-				.single();
-
-			if (error) {
-				window.showToast("Lỗi cập nhật trạng thái: " + error.message);
-				return;
-			}
-
-			await createActivityLog('update', 'defects', id, `Cập nhật trạng thái hàng lỗi: ${updatedDefect?.product_name || currentDefect.product_name || '-'}`, { old_status: currentDefect.status, new_status: status, sku: updatedDefect?.sku || currentDefect.sku, barcode: updatedDefect?.barcode || currentDefect.barcode });
-
-			if (currentDefect.status !== status) {
-				const notificationType = status === 'Fixing'
-					? 'defect_fixing'
-					: status === 'Resolved'
-						? 'defect_resolved'
-						: 'defect_status_updated';
-
-				await createNotification(notificationType, updatedDefect || currentDefect, { status });
-			}
-
-			window.showToast(`Đã cập nhật trạng thái: ${getStatusText(status)}`, 'success');
-			toggleModal('modal-status', false);
-			await fetchDefects();
-		}
 
 		function downloadDefectSampleExcel() {
 			const data = [{
@@ -3855,9 +4027,58 @@ let defectsData = [];
 			});
 
 			if (!canManageData()) {
-				document.getElementById('view-catalog').classList.add('hidden');
-				document.getElementById('view-dashboard').classList.remove('hidden');
+				document.getElementById('view-catalog')?.classList.add('hidden');
 			}
+
+            // Không để staff/PO nhìn thấy Dashboard dù DOM đã được tải sẵn.
+            if (!isAdmin()) {
+                document.getElementById('view-dashboard')?.classList.add('hidden');
+                if (document.body.classList.contains('active-tab-dashboard')) {
+                    window.switchTab?.('defects', { silent: true });
+                }
+            }
+
+            // Đồng bộ menu PC theo quyền. Riêng tab Tài khoản trên PC chỉ admin được thấy.
+            // Bottom navigation mobile được mobile.js xử lý riêng bằng getAllowedTabs().
+            const allowedTabs = getAllowedTabs();
+            ['dashboard', 'defects', 'history', 'catalog', 'users', 'logs'].forEach(tabName => {
+                const visible = tabName === 'users' ? isAdmin() : allowedTabs.includes(tabName);
+                ['side-tab-', 'tab-'].forEach(prefix => {
+                    const element = document.getElementById(prefix + tabName);
+                    if (!element) return;
+                    element.classList.toggle('hidden', !visible);
+                    element.hidden = !visible;
+                    if (!visible) {
+                        element.style.setProperty('display', 'none', 'important');
+                    } else {
+                        element.style.removeProperty('display');
+                    }
+                    element.setAttribute('aria-hidden', visible ? 'false' : 'true');
+                });
+            });
+
+            const accountLabel = isAdmin() ? 'Quản lý tài khoản' : 'Tài khoản';
+            const topAccountLabel = document.getElementById('top-account-tab-label');
+            const sideAccountLabel = document.getElementById('side-account-tab-label');
+            const sideAccountIcon = document.getElementById('side-account-tab-icon');
+            if (topAccountLabel) topAccountLabel.textContent = accountLabel;
+            if (sideAccountLabel) sideAccountLabel.textContent = accountLabel;
+            if (sideAccountIcon) {
+                sideAccountIcon.className = isAdmin() ? 'fas fa-users-gear' : 'fas fa-user-circle';
+            }
+
+            // Nếu tab hiện tại không còn hợp lệ sau khi đổi/khôi phục quyền,
+            // đưa về tab mặc định để tránh menu và nội dung lệch nhau.
+            const activeClass = [...document.body.classList].find(cls => cls.startsWith('active-tab-'));
+            const activeTab = activeClass ? activeClass.replace('active-tab-', '') : '';
+            if (activeTab && !allowedTabs.includes(activeTab)) {
+                window.switchTab?.(getDefaultLandingTab(), { silent: true });
+            }
+
+            if (typeof updateBodyRoleClass === 'function') updateBodyRoleClass();
+            if (typeof window.refreshMobileNavigation === 'function') {
+                window.refreshMobileNavigation();
+            }
 		}
 
 		function renderUsers() {
@@ -4198,10 +4419,25 @@ let defectsData = [];
 			await fetchUsers();
 		};
 
-        enhanceExcelFilters();
-        init();
-		document.body.classList.add('active-tab-dashboard');
-		checkLogin();
+        let appBootstrapPromise = null;
+        function bootstrapApp() {
+            if (appBootstrapPromise) return appBootstrapPromise;
+            appBootstrapPromise = (async () => {
+                await init();
+                await checkLogin();
+            })().catch(error => {
+                console.error('Không thể khởi động ứng dụng:', error);
+                hideAppLoading(true);
+                document.getElementById('login-screen')?.classList.remove('hidden');
+            });
+            return appBootstrapPromise;
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootstrapApp, { once: true });
+        } else {
+            setTimeout(bootstrapApp, 0);
+        }
     
 
         function scrollToTop() {
@@ -4231,6 +4467,24 @@ let defectsData = [];
             document.body.classList.remove('role-admin', 'role-po', 'role-staff', 'role-user');
             const role = currentRole || 'staff';
             document.body.classList.add('role-' + role);
+        }
+
+        // Nếu PO/nhân viên đang ở tab Tài khoản trên mobile rồi chuyển sang kích thước PC,
+        // tự đưa về Hàng lỗi để giao diện và quyền truy cập luôn đồng bộ.
+        if (!window.__pcAccountTabGuardBound) {
+            window.__pcAccountTabGuardBound = true;
+            let pcAccountResizeTimer = null;
+            window.addEventListener('resize', () => {
+                clearTimeout(pcAccountResizeTimer);
+                pcAccountResizeTimer = setTimeout(() => {
+                    const isDesktopViewport = window.matchMedia('(min-width: 769px)').matches;
+                    if (!isDesktopViewport || isAdmin()) return;
+                    if (document.body.classList.contains('active-tab-users')) {
+                        window.switchTab?.('defects', { silent: true });
+                    }
+                    if (typeof applyPermissionUI === 'function') applyPermissionUI();
+                }, 120);
+            }, { passive: true });
         }
 
 
@@ -4329,7 +4583,7 @@ let defectsData = [];
                     return activeView.id.replace('view-', '');
                 }
 
-                return 'dashboard';
+                return typeof getDefaultLandingTab === 'function' ? getDefaultLandingTab() : 'defects';
             }
 
             function goToAdjacentTab(direction) {
@@ -4337,6 +4591,7 @@ let defectsData = [];
                 const availableTabs = (typeof getAllowedTabs === 'function')
                     ? getAllowedTabs().filter(tab => allMobileTabs.includes(tab))
                     : allMobileTabs.filter(tab => {
+                        if (tab === 'dashboard') return typeof isAdmin === 'function' && isAdmin();
                         if (tab === 'catalog') return typeof canManageData === 'function' && canManageData();
                         if (tab === 'logs') return typeof isAdmin === 'function' && isAdmin();
                         return true;
@@ -4410,61 +4665,10 @@ let defectsData = [];
 
 
 
-        // Mobile: kéo xuống ẩn header, kéo lên hiện lại
-        (function setupMobileHideHeaderOnScroll() {
-            if (window.__mobileHideHeaderOnScrollReady) return;
-            window.__mobileHideHeaderOnScrollReady = true;
+        // Mobile: giữ header luôn hiển thị để người dùng luôn thấy khu vực điều hướng.
+        document.body.classList.remove('mobile-header-hidden');
 
-            let lastY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            let ticking = false;
 
-            function isMobileViewport() {
-                return window.matchMedia('(max-width: 768px)').matches;
-            }
-
-            function shouldKeepHeaderVisible() {
-                return document.body.classList.contains('modal-open') ||
-                    document.body.classList.contains('image-modal-open') ||
-                    !document.getElementById('login-screen')?.classList.contains('hidden');
-            }
-
-            function updateHeaderByScroll() {
-                ticking = false;
-
-                if (!isMobileViewport() || shouldKeepHeaderVisible()) {
-                    document.body.classList.remove('mobile-header-hidden');
-                    lastY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    return;
-                }
-
-                const currentY = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0);
-                const diff = currentY - lastY;
-
-                // Ở gần đầu trang thì luôn hiện header.
-                if (currentY < 24) {
-                    document.body.classList.remove('mobile-header-hidden');
-                } else if (diff > 4) {
-                    // Cuộn/kéo xuống: ẩn header.
-                    document.body.classList.add('mobile-header-hidden');
-                } else if (diff < -4) {
-                    // Cuộn/kéo lên: hiện header.
-                    document.body.classList.remove('mobile-header-hidden');
-                }
-
-                lastY = currentY;
-            }
-
-            function requestUpdate() {
-                if (ticking) return;
-                ticking = true;
-                requestAnimationFrame(updateHeaderByScroll);
-            }
-
-            window.addEventListener('scroll', requestUpdate, { passive: true });
-            document.addEventListener('touchmove', requestUpdate, { passive: true });
-            window.addEventListener('resize', requestUpdate, { passive: true });
-            document.addEventListener('DOMContentLoaded', requestUpdate);
-        })();
 
 
 /* ========================================================================== 
@@ -4566,8 +4770,6 @@ function restoreDashboardSettings() {
     if (severity && [...severity.options].some(option => option.value === savedSeverity)) severity.value = savedSeverity;
     if (aging && [...aging.options].some(option => option.value === savedAging)) aging.value = savedAging;
 
-    const collapsed = getDashboardStoredValue('collapsed', 'false') === 'true';
-    setDashboardCollapsed(collapsed, false);
     updateDashboardCustomRangeVisibility();
 }
 
@@ -4605,24 +4807,6 @@ function applyDashboardCustomRange() {
     renderDashboardAnalytics();
 }
 
-function setDashboardCollapsed(collapsed, persist = true) {
-    const content = document.getElementById('dashboard-analytics-content');
-    const button = document.getElementById('dashboard-collapse-btn');
-    if (!content || !button) return;
-    content.classList.toggle('dashboard-collapsed', collapsed);
-    button.setAttribute('aria-expanded', String(!collapsed));
-    button.querySelector('i')?.classList.toggle('fa-chevron-up', !collapsed);
-    button.querySelector('i')?.classList.toggle('fa-chevron-down', collapsed);
-    const label = button.querySelector('span');
-    if (label) label.textContent = collapsed ? 'Mở rộng' : 'Thu gọn';
-    if (persist) setDashboardStoredValue('collapsed', collapsed ? 'true' : 'false');
-}
-
-function toggleDashboardAnalytics() {
-    const content = document.getElementById('dashboard-analytics-content');
-    setDashboardCollapsed(!content?.classList.contains('dashboard-collapsed'));
-}
-
 function handleDashboardCardKey(event, status) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
@@ -4631,7 +4815,7 @@ function handleDashboardCardKey(event, status) {
 
 function openDefectsTabAndScroll() {
     if (typeof window.switchTab === 'function') {
-        window.switchTab('defects', { silent: true });
+        window.switchTab('defects', { silent: true, preserveScroll: true });
     }
     window.setTimeout(() => {
         document.getElementById('dashboard-detail-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -4744,20 +4928,16 @@ function getDefectAgeDays(item) {
     return Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
 }
 
-function getDefectDueDate(item) {
-    return getValidDashboardDate(item?.due_at);
+function getDefectDueDate() {
+    return null;
 }
 
-function isDefectOverdue(item) {
-    const due = getDefectDueDate(item);
-    return item?.status !== 'Resolved' && !!due && due.getTime() < Date.now();
+function isDefectOverdue() {
+    return false;
 }
 
-function isDefectDueSoon(item) {
-    const due = getDefectDueDate(item);
-    if (item?.status === 'Resolved' || !due) return false;
-    const diff = due.getTime() - Date.now();
-    return diff >= 0 && diff <= 48 * 3600000;
+function isDefectDueSoon() {
+    return false;
 }
 
 function formatDashboardDuration(ms) {
@@ -4777,23 +4957,13 @@ function getResolutionDurationMs(item) {
     return resolved.getTime() - created.getTime();
 }
 
-function getDueLabel(item) {
-    const due = getDefectDueDate(item);
-    if (!due) return '';
-    if (isDefectOverdue(item)) {
-        const days = Math.max(1, Math.ceil((Date.now() - due.getTime()) / 86400000));
-        return `Quá hạn ${days} ngày`;
-    }
-    return `Hạn ${due.toLocaleDateString('vi-VN')}`;
+function getDueLabel() {
+    return '';
 }
 
 function getWorkflowMetaHtml(item) {
-    const assigned = item?.assigned_to ? `<span><i class="fas fa-user-check"></i> ${escapeHtml(item.assigned_to)}</span>` : '';
-    const dueLabel = getDueLabel(item);
-    const dueClass = isDefectOverdue(item) ? 'workflow-meta-overdue' : (isDefectDueSoon(item) ? 'workflow-meta-soon' : '');
-    const due = dueLabel ? `<span class="${dueClass}"><i class="fas fa-calendar-day"></i> ${escapeHtml(dueLabel)}</span>` : '';
-    if (!assigned && !due) return '';
-    return `<div class="workflow-row-meta">${assigned}${due}</div>`;
+    if (!item || normalizeDefectStatus(item.status) === 'Resolved') return '';
+    return `<div class="workflow-row-meta"><span><i class="fas fa-clock-rotate-left"></i> Tồn ${escapeHtml(formatDashboardAge(item.created_at))}</span></div>`;
 }
 
 function getSearchFilteredRows(tableName) {
@@ -4804,18 +4974,19 @@ function getSearchFilteredRows(tableName) {
         const agingFilter = document.getElementById('filter-aging')?.value || 'All';
 
         return defectsData.filter(d => {
-            if (statusFilter === 'All' && d.status === 'Resolved') return false;
-            if (statusFilter !== 'All' && d.status !== statusFilter) return false;
+            const status = normalizeDefectStatus(d.status);
+            if (statusFilter === 'All' && status === 'Resolved') return false;
+            if (statusFilter !== 'All' && status !== statusFilter) return false;
             if (severityFilter !== 'All' && d.severity !== severityFilter) return false;
-            if (agingFilter === 'overdue' && !isDefectOverdue(d)) return false;
-            if (agingFilter === 'dueSoon' && !isDefectDueSoon(d)) return false;
-            if (agingFilter === 'older7' && (d.status === 'Resolved' || getDefectAgeDays(d) < 7)) return false;
+            if (agingFilter === 'older3' && (status === 'Resolved' || getDefectAgeDays(d) < 3)) return false;
+            if (agingFilter === 'older7' && (status === 'Resolved' || getDefectAgeDays(d) < 7)) return false;
+            if (agingFilter === 'older30' && (status === 'Resolved' || getDefectAgeDays(d) < 30)) return false;
 
-            const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''} ${d.assigned_to || ''}`.toLowerCase();
+            const searchStr = `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''}`.toLowerCase();
             if (!query) return true;
             if (query.includes('*')) {
                 const pattern = wildcardToRegex(query);
-                return [d.product_name, d.barcode, d.sku, d.vendor_name, d.vendor_id, d.defect_type, d.assigned_to].some(value => pattern.test(value || ''));
+                return [d.product_name, d.barcode, d.sku, d.vendor_name, d.vendor_id, d.defect_type].some(value => pattern.test(value || ''));
             }
             return searchStr.includes(query);
         });
@@ -4824,8 +4995,8 @@ function getSearchFilteredRows(tableName) {
     if (tableName === 'history') {
         const query = (historySearch?.value || '').toLowerCase().trim();
         return defectsData.filter(d => {
-            if (d.status !== 'Resolved') return false;
-            return `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''} ${d.assigned_to || ''} ${d.resolution_note || ''}`.toLowerCase().includes(query);
+            if (normalizeDefectStatus(d.status) !== 'Resolved') return false;
+            return `${d.product_name || ''} ${d.sku || ''} ${d.barcode || ''} ${d.vendor_name || ''} ${d.vendor_id || ''} ${d.defect_type || ''} ${d.resolution_note || ''}`.toLowerCase().includes(query);
         });
     }
     if (tableName === 'catalog') {
@@ -4849,19 +5020,16 @@ function renderDashboardAnalytics() {
     const previousRows = config.value === 'all' ? [] : getDashboardPeriodRows(config, 1);
     const totalReports = rows.length;
     const totalQuantity = sumDashboardQuantity(rows);
-    const pendingRows = rows.filter(item => item.status === 'Pending');
-    const fixingRows = rows.filter(item => item.status === 'Fixing');
-    const resolvedRows = rows.filter(item => item.status === 'Resolved');
-    const allUnresolvedRows = defectsData.filter(item => item.status !== 'Resolved');
+    const pendingRows = rows.filter(item => normalizeDefectStatus(item.status) === 'Pending');
+    const resolvedRows = rows.filter(item => normalizeDefectStatus(item.status) === 'Resolved');
+    const allPendingRows = defectsData.filter(item => normalizeDefectStatus(item.status) === 'Pending');
     const completionRate = dashboardPercent(resolvedRows.length, totalReports);
 
     setDashboardText('stat-total', totalQuantity.toLocaleString('vi-VN'));
     setDashboardText('stat-pending', sumDashboardQuantity(pendingRows).toLocaleString('vi-VN'));
-    setDashboardText('stat-fixing', sumDashboardQuantity(fixingRows).toLocaleString('vi-VN'));
     setDashboardText('stat-resolved', sumDashboardQuantity(resolvedRows).toLocaleString('vi-VN'));
     setDashboardText('dashboard-total-reports', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
     setDashboardText('dashboard-pending-share', `${pendingRows.length.toLocaleString('vi-VN')} báo cáo · ${dashboardPercent(pendingRows.length, totalReports)}%`);
-    setDashboardText('dashboard-fixing-share', `${fixingRows.length.toLocaleString('vi-VN')} báo cáo · ${dashboardPercent(fixingRows.length, totalReports)}%`);
     setDashboardText('dashboard-completion-rate', `${resolvedRows.length.toLocaleString('vi-VN')} báo cáo · ${completionRate}%`);
     setDashboardText('dashboard-donut-rate', `${completionRate}%`);
     setDashboardText('dashboard-trend-total', `${totalReports.toLocaleString('vi-VN')} báo cáo`);
@@ -4872,24 +5040,19 @@ function renderDashboardAnalytics() {
         : `Theo dõi tình trạng hàng lỗi trong ${config.label}.`;
 
     const todayKey = new Date().toDateString();
+    const createdToday = defectsData.filter(item => getValidDashboardDate(item.created_at)?.toDateString() === todayKey);
     const resolvedToday = defectsData.filter(item => {
         const date = getValidDashboardDate(item.resolved_at);
-        return item.status === 'Resolved' && date?.toDateString() === todayKey;
+        return normalizeDefectStatus(item.status) === 'Resolved' && date?.toDateString() === todayKey;
     });
     setDashboardText('dashboard-today-count', `Hôm nay: ${resolvedToday.length} hoàn thành`);
+    setDashboardText('dashboard-created-today', `${createdToday.length} báo cáo`);
     setDashboardText('dashboard-resolved-today', `${resolvedToday.length} báo cáo`);
-
-    const oldestOpen = [...allUnresolvedRows]
-        .map(item => getValidDashboardDate(item.created_at))
-        .filter(Boolean)
-        .sort((a, b) => a - b)[0];
-    setDashboardText('dashboard-oldest-open', oldestOpen ? `Tồn lâu nhất: ${formatDashboardAge(oldestOpen)}` : 'Không có tồn đọng');
 
     const durations = resolvedRows.map(getResolutionDurationMs).filter(value => value !== null);
     const avgDuration = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null;
     setDashboardText('dashboard-avg-resolution', avgDuration === null ? 'Chưa có dữ liệu' : formatDashboardDuration(avgDuration));
-    setDashboardText('dashboard-overdue-count', `${allUnresolvedRows.filter(isDefectOverdue).length} mục`);
-    setDashboardText('dashboard-open-over7', `${allUnresolvedRows.filter(item => getDefectAgeDays(item) >= 7).length} mục`);
+    setDashboardText('dashboard-open-over7', `${allPendingRows.filter(item => getDefectAgeDays(item) >= 7).length} mục`);
 
     const trendElement = document.getElementById('dashboard-total-trend');
     if (trendElement) {
@@ -4936,15 +5099,13 @@ function renderDashboardAnalytics() {
     }
 
     const pendingPercent = dashboardPercent(pendingRows.length, totalReports);
-    const fixingPercent = dashboardPercent(fixingRows.length, totalReports);
     const resolvedPercent = dashboardPercent(resolvedRows.length, totalReports);
     const donut = document.getElementById('dashboard-status-donut');
     if (donut) {
         const pendingEnd = pendingPercent;
-        const fixingEnd = Math.min(100, pendingEnd + fixingPercent);
-        const resolvedEnd = Math.min(100, fixingEnd + resolvedPercent);
+        const resolvedEnd = Math.min(100, pendingEnd + resolvedPercent);
         donut.style.setProperty('--dashboard-donut-bg', totalReports
-            ? `conic-gradient(#f59e0b 0 ${pendingEnd}%, #f97316 ${pendingEnd}% ${fixingEnd}%, #22c55e ${fixingEnd}% ${resolvedEnd}%, #e2e8f0 ${resolvedEnd}% 100%)`
+            ? `conic-gradient(#f59e0b 0 ${pendingEnd}%, #22c55e ${pendingEnd}% ${resolvedEnd}%, #e2e8f0 ${resolvedEnd}% 100%)`
             : 'conic-gradient(#e2e8f0 0 100%)');
     }
 
@@ -4952,8 +5113,7 @@ function renderDashboardAnalytics() {
     if (legend) {
         const legendRows = [
             { label: 'Chờ xử lý', rows: pendingRows, color: '#f59e0b' },
-            { label: 'Đang sửa', rows: fixingRows, color: '#f97316' },
-            { label: 'Đã xong', rows: resolvedRows, color: '#22c55e' }
+            { label: 'Hoàn thành', rows: resolvedRows, color: '#22c55e' }
         ];
         legend.innerHTML = legendRows.map(item => `<div class="dashboard-legend-row">
             <span class="dashboard-legend-dot" style="background:${item.color}"></span>
@@ -4983,48 +5143,45 @@ function renderDashboardAnalytics() {
             vendorContainer.innerHTML = topVendors.map((item, index) => `<button type="button" class="dashboard-vendor-row" data-vendor="${escapeHtmlAttr(item.name)}" onclick="filterDashboardByVendor(this.dataset.vendor)">
                 <span class="dashboard-rank">${index + 1}</span>
                 <span class="dashboard-vendor-main">
-                    <span class="dashboard-vendor-name"><span title="${escapeHtmlAttr(item.name)}">${escapeHtml(item.name)}</span><span>${item.reports} báo cáo</span></span>
-                    <span class="dashboard-vendor-progress"><span style="width:${Math.max(8, Math.round((item.reports / maxVendorReports) * 100))}%"></span></span>
+                    <span class="dashboard-vendor-head">
+                        <span class="dashboard-vendor-title" title="${escapeHtmlAttr(item.name)}">${escapeHtml(item.name)}</span>
+                        <span class="dashboard-vendor-metrics">
+                            <span class="dashboard-vendor-pill">${item.reports} báo cáo</span>
+                            <span class="dashboard-vendor-pill is-qty">SL ${item.quantity}</span>
+                        </span>
+                    </span>
+                    <span class="dashboard-vendor-progress" aria-hidden="true"><span style="width:${Math.max(8, Math.round((item.reports / maxVendorReports) * 100))}%"></span></span>
                 </span>
-                <span class="dashboard-vendor-total">SL ${item.quantity}</span>
             </button>`).join('');
         }
     }
 
     const severityRank = { High: 3, Medium: 2, Low: 1 };
-    const priorityRows = [...allUnresolvedRows]
+    const priorityRows = [...allPendingRows]
         .sort((a, b) => {
-            const overdueDiff = Number(isDefectOverdue(b)) - Number(isDefectOverdue(a));
-            if (overdueDiff) return overdueDiff;
             const severityDiff = (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0);
             if (severityDiff) return severityDiff;
-            const aDue = getDefectDueDate(a)?.getTime() || Number.MAX_SAFE_INTEGER;
-            const bDue = getDefectDueDate(b)?.getTime() || Number.MAX_SAFE_INTEGER;
-            if (aDue !== bDue) return aDue - bDue;
             return (getValidDashboardDate(a.created_at)?.getTime() || Date.now()) - (getValidDashboardDate(b.created_at)?.getTime() || Date.now());
         })
         .slice(0, 6);
 
-    setDashboardText('dashboard-priority-count', `${allUnresolvedRows.length} mục`);
+    setDashboardText('dashboard-priority-count', `${allPendingRows.length} mục`);
     const priorityContainer = document.getElementById('dashboard-priority-list');
     if (priorityContainer) {
         if (!priorityRows.length) {
-            priorityContainer.innerHTML = '<div class="dashboard-empty"><i class="fas fa-circle-check"></i><span>Không có hàng lỗi tồn đọng.</span></div>';
+            priorityContainer.innerHTML = '<div class="dashboard-empty"><i class="fas fa-circle-check"></i><span>Không có hàng lỗi chờ xử lý.</span></div>';
         } else {
-            priorityContainer.innerHTML = priorityRows.map(item => {
-                const dueLabel = getDueLabel(item);
-                return `<button type="button" class="dashboard-priority-item ${isDefectOverdue(item) ? 'is-overdue' : ''}" data-id="${escapeHtmlAttr(item.id)}" onclick="openStatusModal(this.dataset.id)">
-                    <span class="dashboard-priority-icon"><i class="fas ${isDefectOverdue(item) ? 'fa-calendar-xmark' : 'fa-triangle-exclamation'}"></i></span>
-                    <span class="dashboard-priority-copy">
-                        <span class="dashboard-priority-name">${escapeHtml(item.product_name || 'Sản phẩm chưa có tên')}</span>
-                        <span class="dashboard-priority-meta">${escapeHtml(item.vendor_name || 'Chưa có NCC')} · ITEM ${escapeHtml(item.sku || 'N/A')}${item.assigned_to ? ` · ${escapeHtml(item.assigned_to)}` : ''}</span>
-                    </span>
-                    <span class="dashboard-priority-age">
-                        <span class="${isDefectOverdue(item) ? 'text-red-600' : ''}">${escapeHtml(dueLabel || formatDashboardAge(item.created_at))}</span>
-                        <span class="dashboard-priority-status ${getStatusClass(item.status)}">${getStatusText(item.status)}</span>
-                    </span>
-                </button>`;
-            }).join('');
+            priorityContainer.innerHTML = priorityRows.map(item => `<button type="button" class="dashboard-priority-item" data-id="${escapeHtmlAttr(item.id)}" onclick="openStatusModal(this.dataset.id)">
+                <span class="dashboard-priority-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                <span class="dashboard-priority-copy">
+                    <span class="dashboard-priority-name">${escapeHtml(item.product_name || 'Sản phẩm chưa có tên')}</span>
+                    <span class="dashboard-priority-meta">${escapeHtml(item.vendor_name || 'Chưa có NCC')} · ITEM ${escapeHtml(item.sku || 'N/A')}</span>
+                </span>
+                <span class="dashboard-priority-age">
+                    <span>${escapeHtml(formatDashboardAge(item.created_at))}</span>
+                    <span class="dashboard-priority-status ${getStatusClass(item.status)}">Chờ xử lý</span>
+                </span>
+            </button>`).join('');
         }
     }
 }
@@ -5038,6 +5195,11 @@ function renderDashboard() {
     restoreDashboardSettings();
     renderDashboardAnalytics();
     updateDashboardActiveCards();
+
+    // Dashboard và Hàng lỗi là hai tab riêng. Chỉ dựng bảng chi tiết
+    // khi người dùng thật sự đang ở tab Hàng lỗi.
+    if (getActiveAppTab() !== 'defects') return;
+
     const listContainer = document.getElementById('defect-list');
     if (!listContainer) return;
     listContainer.classList.add('opacity-50');
@@ -5050,7 +5212,7 @@ function renderDashboard() {
 
     listContainer.innerHTML = filtered.map(d => {
         const id = escapeHtmlAttr(d.id);
-        return `<tr data-id="${id}" onclick="openStatusModal(this.dataset.id)" class="hover:bg-slate-50 group cursor-pointer ${isDefectOverdue(d) ? 'workflow-row-overdue' : ''}">
+        return `<tr data-id="${id}" onclick="openStatusModal(this.dataset.id)" class="hover:bg-slate-50 group cursor-pointer">
             <td class="px-6 py-4 whitespace-nowrap"><div class="text-xs text-slate-600 font-medium">${escapeHtml(formatDateTime(d.created_at))}</div></td>
             <td class="px-6 py-4"><div class="flex items-center gap-3">${renderDefectImages(d, 'desktop')}<div>
                 <div class="font-semibold text-slate-800">${escapeHtml(d.product_name || 'N/A')}</div>
@@ -5072,7 +5234,7 @@ function renderDashboard() {
     const mobileList = document.getElementById('defect-mobile-list');
     if (mobileList) mobileList.innerHTML = filtered.map(d => {
         const id = escapeHtmlAttr(d.id);
-        return `<div data-id="${id}" onclick="openStatusModal(this.dataset.id)" class="bg-white border ${isDefectOverdue(d) ? 'border-red-300' : 'border-slate-200'} rounded-2xl p-4 shadow-sm active:scale-[0.99] transition cursor-pointer">
+        return `<div data-id="${id}" onclick="openStatusModal(this.dataset.id)" class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm active:scale-[0.99] transition cursor-pointer">
             <div class="flex gap-3">${renderDefectImages(d, 'mobile')}<div class="flex-1 min-w-0">
                 <div class="font-bold text-slate-800 text-base leading-snug">${escapeHtml(d.product_name || 'N/A')}</div>
                 <div class="text-xs text-slate-500 mt-1">${escapeHtml(formatDateTime(d.created_at))}</div>
@@ -5184,6 +5346,26 @@ function populateAssigneeOptions() {
     });
 }
 
+function updateStatusActionButtons(currentStatus) {
+    const normalized = normalizeDefectStatus(currentStatus);
+    const pendingButton = document.getElementById('status-btn-pending');
+    const resolvedButton = document.getElementById('status-btn-resolved');
+
+    [pendingButton, resolvedButton].forEach(button => {
+        if (!button) return;
+        button.disabled = false;
+        button.classList.remove('is-current');
+        button.removeAttribute('aria-current');
+    });
+
+    const currentButton = normalized === 'Resolved' ? resolvedButton : pendingButton;
+    if (currentButton) {
+        currentButton.disabled = true;
+        currentButton.classList.add('is-current');
+        currentButton.setAttribute('aria-current', 'true');
+    }
+}
+
 function openStatusModal(id) {
     const defect = defectsData.find(d => String(d.id) === String(id));
     if (!defect) return;
@@ -5192,55 +5374,56 @@ function openStatusModal(id) {
     document.getElementById('status-sku').textContent = defect.sku || '-';
     document.getElementById('status-barcode').textContent = defect.barcode || '-';
     document.getElementById('status-created-at').textContent = formatDateTime(defect.created_at);
-    document.getElementById('status-fixing-at').textContent = defect.fixing_at ? formatDateTime(defect.fixing_at) : 'Chưa bắt đầu';
     document.getElementById('status-resolved-at').textContent = defect.resolved_at ? formatDateTime(defect.resolved_at) : 'Chưa hoàn thành';
     const duration = getResolutionDurationMs(defect);
     document.getElementById('status-processing-time').textContent = duration === null ? 'Chưa có dữ liệu' : formatDashboardDuration(duration);
-    document.getElementById('status-assigned-to').value = defect.assigned_to || '';
-    document.getElementById('status-due-at').value = dateTimeToInputValue(defect.due_at);
     document.getElementById('status-resolution-note').value = defect.resolution_note || '';
-    populateAssigneeOptions();
-    const schemaReady = ['updated_at', 'fixing_at', 'resolved_at', 'assigned_to', 'due_at', 'resolution_note'].some(key => Object.prototype.hasOwnProperty.call(defect, key));
+    updateStatusActionButtons(defect.status);
+    const schemaReady = ['updated_at', 'resolved_at', 'resolution_note'].some(key => Object.prototype.hasOwnProperty.call(defect, key));
     document.getElementById('workflow-schema-warning')?.classList.toggle('hidden', schemaReady);
     toggleModal('modal-status', true);
 }
 
 function isWorkflowSchemaError(error) {
     const text = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`.toLowerCase();
-    return ['updated_at', 'fixing_at', 'resolved_at', 'assigned_to', 'due_at', 'resolution_note'].some(column => text.includes(column)) || text.includes('pgrst204') || text.includes('42703');
+    return ['updated_at', 'resolved_at', 'resolution_note'].some(column => text.includes(column)) || text.includes('pgrst204') || text.includes('42703');
 }
 
-async function saveStatus(status) {
+async function saveStatus(requestedStatus) {
     const id = document.getElementById('status-defect-id')?.value;
     if (!id) return;
+
+    const status = normalizeDefectStatus(requestedStatus);
     const currentDefect = defectsData.find(d => String(d.id) === String(id)) || {};
+    const oldStatus = normalizeDefectStatus(currentDefect.status);
+
+    if (status === 'Resolved' && oldStatus !== 'Resolved') {
+        const productName = String(currentDefect.product_name || 'hàng lỗi này').trim();
+        const confirmed = await showConfirm(
+            `Bạn có chắc chắn muốn đánh dấu “${productName}” là Hoàn thành? Sau khi xác nhận, báo cáo sẽ được chuyển sang Lịch sử.`,
+            {
+                title: 'Xác nhận hoàn thành',
+                confirmText: 'Xác nhận hoàn thành',
+                cancelText: 'Hủy',
+                type: 'warning'
+            }
+        );
+        if (!confirmed) return;
+    }
+
     const now = new Date().toISOString();
-    const assignedTo = cleanTextValue(document.getElementById('status-assigned-to')?.value);
-    const dueLocal = document.getElementById('status-due-at')?.value || '';
     const resolutionNote = cleanTextValue(document.getElementById('status-resolution-note')?.value);
 
     const workflowPayload = {
         status,
         updated_at: now,
-        assigned_to: assignedTo || null,
-        due_at: dueLocal ? new Date(dueLocal).toISOString() : null,
-        resolution_note: resolutionNote || null
+        resolution_note: resolutionNote || null,
+        resolved_at: status === 'Resolved'
+            ? (oldStatus === 'Resolved' && currentDefect.resolved_at ? currentDefect.resolved_at : now)
+            : null
     };
 
-    if (status === 'Pending') {
-        workflowPayload.fixing_at = null;
-        workflowPayload.resolved_at = null;
-    } else if (status === 'Fixing') {
-        workflowPayload.fixing_at = currentDefect.status === 'Fixing' && currentDefect.fixing_at ? currentDefect.fixing_at : now;
-        workflowPayload.resolved_at = null;
-        if (!workflowPayload.assigned_to) workflowPayload.assigned_to = currentDisplayName || null;
-    } else if (status === 'Resolved') {
-        workflowPayload.fixing_at = currentDefect.fixing_at || null;
-        workflowPayload.resolved_at = currentDefect.status === 'Resolved' && currentDefect.resolved_at ? currentDefect.resolved_at : now;
-        if (!workflowPayload.assigned_to) workflowPayload.assigned_to = currentDisplayName || null;
-    }
-
-    showAppLoading('Đang cập nhật xử lý...', 'Đang lưu trạng thái và thời gian thực tế');
+    showAppLoading('Đang cập nhật xử lý...', 'Đang lưu trạng thái hàng lỗi');
     let updatedDefect = null;
     let usedWorkflowFallback = false;
     try {
@@ -5253,22 +5436,20 @@ async function saveStatus(status) {
         updatedDefect = result.data;
 
         await createActivityLog('update', 'defects', id, `Cập nhật xử lý hàng lỗi: ${updatedDefect?.product_name || currentDefect.product_name || '-'}`, {
-            old_status: currentDefect.status,
+            old_status: oldStatus,
             new_status: status,
             sku: updatedDefect?.sku || currentDefect.sku,
             barcode: updatedDefect?.barcode || currentDefect.barcode,
-            assigned_to: workflowPayload.assigned_to,
-            due_at: workflowPayload.due_at,
             resolution_note: workflowPayload.resolution_note
         });
 
-        if (currentDefect.status !== status) {
-            const notificationType = status === 'Fixing' ? 'defect_fixing' : status === 'Resolved' ? 'defect_resolved' : 'defect_status_updated';
+        if (oldStatus !== status) {
+            const notificationType = status === 'Resolved' ? 'defect_resolved' : 'defect_status_updated';
             await createNotification(notificationType, updatedDefect || currentDefect, { status });
         }
 
         window.showToast(usedWorkflowFallback
-            ? `Đã cập nhật trạng thái. Chạy SUPABASE_UPGRADE_V2.sql để lưu thời gian và người phụ trách.`
+            ? 'Đã cập nhật trạng thái. Chạy SUPABASE_UPGRADE_V3_9.sql để lưu thời gian hoàn thành và ghi chú.'
             : `Đã cập nhật: ${getStatusText(status)}`, usedWorkflowFallback ? 'warning' : 'success', { duration: usedWorkflowFallback ? 6500 : 3800 });
         toggleModal('modal-status', false);
         await fetchDefects();
@@ -5284,11 +5465,8 @@ function exportDefectsToExcel() {
     if (!visibleRows.length) { window.showToast('Không có dữ liệu phù hợp với bộ lọc hiện tại để xuất!'); return; }
     const dataToExport = visibleRows.map(d => ({
         'Thời gian tiếp nhận': d.created_at ? new Date(d.created_at).toLocaleString('vi-VN') : '',
-        'Bắt đầu sửa': d.fixing_at ? new Date(d.fixing_at).toLocaleString('vi-VN') : '',
         'Hoàn thành': d.resolved_at ? new Date(d.resolved_at).toLocaleString('vi-VN') : '',
         'Thời gian hoàn tất': getResolutionDurationMs(d) === null ? '' : formatDashboardDuration(getResolutionDurationMs(d)),
-        'Người phụ trách': d.assigned_to || '',
-        'Hạn xử lý': d.due_at ? new Date(d.due_at).toLocaleString('vi-VN') : '',
         'Barcode': d.barcode || '', 'Tên sản phẩm': d.product_name || '', 'Số lượng': d.quantity || 1,
         'Item': d.sku || '', 'Mã NCC': d.vendor_id || '', 'Tên NCC': d.vendor_name || '',
         'Loại lỗi': d.defect_type || '', 'Mức độ': d.severity || '', 'Trạng thái': getStatusText(d.status),
@@ -5306,13 +5484,11 @@ function exportHistoryToExcel() {
     if (!rows.length) { window.showToast('Không có dữ liệu lịch sử phù hợp với bộ lọc hiện tại để xuất!'); return; }
     const data = rows.map(d => ({
         'Thời gian tiếp nhận': d.created_at ? new Date(d.created_at).toLocaleString('vi-VN') : '',
-        'Bắt đầu sửa': d.fixing_at ? new Date(d.fixing_at).toLocaleString('vi-VN') : '',
         'Hoàn thành': d.resolved_at ? new Date(d.resolved_at).toLocaleString('vi-VN') : '',
         'Thời gian hoàn tất': getResolutionDurationMs(d) === null ? '' : formatDashboardDuration(getResolutionDurationMs(d)),
-        'Người phụ trách': d.assigned_to || '', 'Hạn xử lý': d.due_at ? new Date(d.due_at).toLocaleString('vi-VN') : '',
         'Barcode': d.barcode || '', 'Tên sản phẩm': d.product_name || '', 'Số lượng': d.quantity || 1,
         'Item': d.sku || '', 'Mã NCC': d.vendor_id || '', 'Tên NCC': d.vendor_name || '', 'Loại lỗi': d.defect_type || '',
-        'Mức độ': d.severity || '', 'Trạng thái': 'Xong', 'Ghi chú kết quả': d.resolution_note || '',
+        'Mức độ': d.severity || '', 'Trạng thái': 'Hoàn thành', 'Ghi chú kết quả': d.resolution_note || '',
         'Link hình ảnh': getSafeGalleryUrls(getDefectImageUrls(d)).join('\n')
     }));
     const worksheet = XLSX.utils.json_to_sheet(data);

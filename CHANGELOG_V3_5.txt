@@ -1,0 +1,9 @@
+HANGLOI DASHBOARD V3.5 - MOBILE PRIORITY CARD OVERFLOW FIX
+
+- Chặn thẻ "Hàng lỗi cần chú ý" vượt quá chiều rộng màn hình.
+- Bổ sung min-width: 0 và overflow an toàn cho grid item.
+- Tên sản phẩm trên mobile hiển thị tối đa 2 dòng, không tràn ngang.
+- Tên nhà cung cấp / ITEM tự xuống dòng khi quá dài.
+- Dòng tuổi tồn và trạng thái tự xuống hàng trên màn hình hẹp.
+- Đồng bộ text-align trái và width 100% cho thẻ ưu tiên.
+- Cập nhật cache CSS/JS lên phiên bản 3.5.0.

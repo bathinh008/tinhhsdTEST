@@ -1,0 +1,7 @@
+v3.23.0
+- Thêm zoom ảnh bằng thao tác chụm hai ngón, giới hạn từ 1x đến 4x.
+- Nhấn đúp để zoom nhanh 2.5x hoặc trở về 1x.
+- Khi ảnh đã zoom, kéo một ngón để di chuyển ảnh.
+- Khi ảnh ở 1x, vuốt trái/phải vẫn chuyển ảnh như trước.
+- Thêm zoom bằng con lăn chuột trên PC.
+- Tự reset zoom khi chuyển ảnh hoặc đóng chế độ xem ảnh.

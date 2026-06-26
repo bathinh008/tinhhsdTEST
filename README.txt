@@ -1,17 +1,41 @@
-BẢN DASHBOARD QUẢN LÝ HÀNG LỖI
-===============================
+BẢN DASHBOARD QUẢN LÝ HÀNG LỖI V3.9
+====================================
 
-Các phần đã bổ sung:
-- Giao diện dashboard tổng quan hiện đại, responsive cho PC và điện thoại.
-- Bộ lọc thống kê: 7 ngày, 30 ngày, 90 ngày và toàn bộ dữ liệu.
-- 4 thẻ KPI: tổng số lượng lỗi, chờ xử lý, đang sửa, đã hoàn thành.
-- So sánh số lượng lỗi với kỳ trước.
-- Biểu đồ xu hướng số báo cáo phát sinh.
-- Biểu đồ tròn tỷ lệ trạng thái xử lý.
+Luồng xử lý hiện tại:
+- Chỉ có 2 trạng thái: Chờ xử lý và Hoàn thành.
+- Báo cáo mới luôn được tạo ở trạng thái Chờ xử lý.
+- Không còn Người phụ trách, Hạn xử lý và trạng thái Đang sửa.
+- Vẫn lưu thời gian hoàn thành và ghi chú kết quả xử lý.
+
+Dashboard:
+- 3 KPI: Tổng số lượng lỗi, Chờ xử lý, Hoàn thành.
+- Thống kê theo 7 ngày, 30 ngày, 90 ngày, khoảng ngày tùy chọn hoặc toàn bộ.
+- Biểu đồ xu hướng phát sinh và tỷ lệ 2 trạng thái.
 - Top 5 nhà cung cấp có nhiều báo cáo lỗi.
-- Danh sách hàng lỗi cần ưu tiên; bấm vào để mở cập nhật trạng thái.
-- Hiển thị số mục đang có trong bảng sau khi tìm kiếm/lọc.
-- Giữ nguyên các chức năng cũ: báo lỗi, hình ảnh, Excel, lịch sử, tài khoản, thông báo và nhật ký.
+- Danh sách hàng lỗi cần chú ý, ưu tiên theo mức độ và thời gian tồn.
+- Bộ lọc thời gian tồn: từ 3 ngày, 7 ngày hoặc 30 ngày.
+
+Các chức năng được giữ nguyên:
+- Báo hàng lỗi và tải nhiều hình ảnh.
+- Tìm kiếm, lọc, nhập và xuất Excel.
+- Lịch sử hoàn thành.
+- Tài khoản, thông báo và nhật ký hoạt động.
+- Giao diện responsive cho máy tính và điện thoại.
+
+CẬP NHẬT SUPABASE
+=================
+Chạy file SUPABASE_UPGRADE_V3_9.sql một lần trong Supabase > SQL Editor.
+File SQL sẽ:
+- Bổ sung updated_at, resolved_at và resolution_note nếu chưa có.
+- Chuyển dữ liệu trạng thái Fixing cũ về Pending.
+- Không xóa dữ liệu hoặc các cột cũ trong database.
+
+CÁCH CHẠY
+=========
+- Trên máy tính: bấm START_LOCAL.bat rồi mở http://localhost:8080.
+- Hoặc tải toàn bộ thư mục lên GitHub Pages.
+- Không xóa thư mục vendor hoặc file tailwind.min.css.
+- Khi cập nhật GitHub Pages, ghi đè toàn bộ file và xóa cache trang nếu vẫn thấy bản cũ.
 
 File chính:
 - index.html
@@ -19,27 +43,15 @@ File chính:
 - app.js
 - mobile.js
 - supabase.js
-
-Lưu ý triển khai:
-- Thay toàn bộ các file cùng tên trên hosting bằng file trong gói này.
-- Giữ nguyên cấu hình Supabase hiện tại trong supabase.js.
-- Nếu GitHub Pages hoặc trình duyệt còn cache bản cũ, hãy hard refresh hoặc tăng CACHE_NAME trong service-worker.js của thư mục cha.
+- tailwind.min.css
+- vendor/
+- SUPABASE_UPGRADE_V3_9.sql
 
 
-DASHBOARD V2 - NÂNG CẤP
-=======================
-1. Chạy SUPABASE_UPGRADE_V2.sql trong Supabase SQL Editor trước khi dùng phần thời gian xử lý.
-2. Tải toàn bộ các file lên hosting, ghi đè bản cũ.
-3. Nhấn Ctrl + F5 hoặc tăng CACHE_NAME của service-worker nếu giao diện vẫn còn bản cũ.
+CẬP NHẬT V3.10
+- Nút trạng thái hiển thị hàng ngang.
+- Trạng thái hiện tại được làm xám và không thể bấm lại.
 
-Nâng cấp chính:
-- Escape dữ liệu động ở dashboard, lịch sử, danh mục, tài khoản và nhật ký.
-- Danh sách ưu tiên lấy toàn bộ hàng chưa hoàn thành, ưu tiên quá hạn và nghiêm trọng.
-- KPI đều dùng số lượng sản phẩm làm số chính; số báo cáo nằm ở dòng phụ.
-- Lưu người phụ trách, hạn xử lý, thời điểm bắt đầu/hoàn thành và ghi chú kết quả.
-- Lọc nhanh bằng KPI, top NCC, mức độ và thời hạn; hỗ trợ ngày tùy chọn và thu gọn dashboard.
 
---- CẬP NHẬT V3: TÁCH TAB ---
-- Dashboard: chỉ xem tổng quan, KPI, biểu đồ và ưu tiên xử lý.
-- Hàng lỗi: tìm kiếm, lọc, thêm mới, cập nhật, nhập và xuất Excel.
-- Bấm dữ liệu trên Dashboard sẽ tự mở tab Hàng lỗi với bộ lọc tương ứng.
+CẬP NHẬT V3.11
+- Nút Hoàn thành yêu cầu xác nhận trước khi lưu trạng thái.

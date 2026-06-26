@@ -1,0 +1,5 @@
+v3.10.0
+- Hai nút Chờ xử lý và Hoàn thành luôn nằm ngang trên PC và mobile.
+- Nút tương ứng với trạng thái hiện tại chuyển sang màu xám và bị vô hiệu hóa.
+- Tránh gửi lại trạng thái không thay đổi.
+- Cập nhật phiên bản cache CSS/JS lên 3.10.0.

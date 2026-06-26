@@ -1,0 +1,9 @@
+v3.7.0
+- Không tải dữ liệu trước khi xác nhận phiên đăng nhập.
+- Chống khởi tạo trùng init/checkLogin.
+- Dashboard không còn render bảng Hàng lỗi ẩn phía sau.
+- Chỉ render Hàng lỗi, Lịch sử và Danh mục khi mở đúng tab.
+- Danh mục được tải nền khi trình duyệt rảnh, không dựng hàng nghìn dòng lúc mở app.
+- Không tải lại Danh mục và Nhật ký mỗi 20 giây khi tab tương ứng không mở.
+- Bỏ tải Tài khoản/Nhật ký ẩn ngay sau đăng nhập.
+- Chống nhiều request fetchDefects/fetchCatalog chạy chồng nhau.

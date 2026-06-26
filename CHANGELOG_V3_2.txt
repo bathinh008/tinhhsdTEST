@@ -1,0 +1,8 @@
+V3.2 - Sửa thanh tab mobile
+
+- Thanh tab được đồng bộ lại ngay sau đăng nhập/khôi phục phiên.
+- Staff/PO trên mobile luôn thấy tab Tài khoản cá nhân.
+- Số cột của HUD tính theo số tab thật sự đang hiển thị.
+- Tự đồng bộ khi tải lại trang, quay lại app, đổi hướng màn hình hoặc đổi quyền.
+- Không còn tình trạng Dashboard hiện 3 tab, chuyển tab mới hiện đủ 4 tab.
+- Tăng cache version lên 3.2.0.
