@@ -1,4 +1,0 @@
-v3.12.0
-- Trên mobile, thẻ Tổng số lượng lỗi chiếm toàn bộ hàng đầu.
-- Thẻ Chờ xử lý và Đã hoàn thành được đặt cạnh nhau ở hàng dưới.
-- Bố cục desktop vẫn giữ 3 KPI trên cùng một hàng.
