@@ -1,4 +1,0 @@
-v3.18.0
-- Đổi tiêu đề khu vực tab Hàng lỗi cho phù hợp sau khi đã tách riêng Dashboard và Hàng lỗi.
-- "Chi tiết báo cáo" -> "Hàng lỗi".
-- "Danh sách hàng lỗi đang xử lý" -> "Danh sách báo cáo hàng lỗi".
