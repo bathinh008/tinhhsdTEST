@@ -1,7 +1,0 @@
-HANGLOI DASHBOARD V3.1
-
-- Bỏ hoàn toàn nút và chức năng Thu gọn/Mở rộng Dashboard.
-- Dashboard luôn hiển thị đầy đủ KPI, biểu đồ và danh sách ưu tiên.
-- Bỏ cơ chế tự ẩn header khi cuộn xuống trên mobile.
-- Khóa thanh tab dưới ở vị trí cố định, luôn hiển thị trên mobile.
-- Tăng độ ổn định của thanh tab với safe-area và dynamic viewport.
