@@ -1,6 +1,0 @@
-v3.24.0
-- Trên mobile, áp dụng tự ẩn header ở tất cả các tab.
-- Vuốt nội dung lên: header ẩn để tăng diện tích hiển thị.
-- Vuốt nội dung xuống hoặc về gần đầu trang: header hiện lại.
-- Thanh tab dưới luôn giữ nguyên.
-- Tạm dừng tự ẩn khi mở form, bàn phím hoặc modal.
