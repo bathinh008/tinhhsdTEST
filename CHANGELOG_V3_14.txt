@@ -1,4 +1,0 @@
-v3.14.0
-- Sửa icon bị trống ở thẻ “Báo cáo mới hôm nay”.
-- Thay icon Font Awesome không tương thích bằng SVG nhúng trực tiếp.
-- Icon luôn hiển thị ngay cả khi CDN Font Awesome tải chậm hoặc thiếu glyph.
