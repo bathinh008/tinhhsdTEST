@@ -1,5 +1,0 @@
-v3.25.0
-- Ẩn header và thanh tab dưới trên mobile khi mở popup hoặc modal.
-- Ẩn header-nav khi xuất hiện hộp xác nhận tùy chỉnh.
-- Khi đóng popup/xác nhận, header và thanh tab tự hiện lại đúng trạng thái.
-- Giữ nguyên hành vi ẩn giao diện khi xem ảnh.
