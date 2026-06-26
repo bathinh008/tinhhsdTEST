@@ -1,5 +1,0 @@
-v3.11.0
-- Khi bấm Hoàn thành, hiển thị hộp cảnh báo xác nhận.
-- Chỉ cập nhật trạng thái sau khi chọn “Xác nhận hoàn thành”.
-- Chọn Hủy, bấm ra ngoài hoặc nhấn Escape sẽ giữ nguyên dữ liệu.
-- Cảnh báo hiển thị tên sản phẩm và nhắc báo cáo sẽ chuyển sang Lịch sử.
