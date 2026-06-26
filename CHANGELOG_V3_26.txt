@@ -1,4 +1,0 @@
-v3.26.0
-- Bổ sung popup Thông báo vào nhóm popup cần ẩn header và thanh tab dưới trên mobile.
-- Khi đóng Thông báo, bấm ra ngoài hoặc nhấn Escape, header-nav hiện lại bình thường.
-- Chỉ tải lại danh sách thông báo khi panel được mở.
