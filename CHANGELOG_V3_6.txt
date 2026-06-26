@@ -1,5 +1,0 @@
-v3.6.0
-- Sắp xếp lại thẻ “NCC có nhiều báo cáo lỗi” trên mobile.
-- Đưa “báo cáo” và “SL” thành badge gọn, dễ đọc hơn.
-- Tên NCC dài được xuống dòng gọn trong tối đa 2 dòng.
-- Giữ progress bar thẳng hàng và tránh vỡ layout trên màn hình hẹp.
