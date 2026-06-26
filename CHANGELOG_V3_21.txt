@@ -1,4 +1,0 @@
-v3.21.0
-- Khi mở chế độ xem ảnh trên mobile, tự ẩn header phía trên.
-- Đồng thời ẩn luôn thanh tab dưới để ảnh hiển thị gọn hơn.
-- Khi đóng xem ảnh, header và thanh tab hiện lại bình thường.
