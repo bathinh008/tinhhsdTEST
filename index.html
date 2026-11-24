@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Tính Hạn Sử Dụng Cao Cấp</title>
+
+<!-- POPUP CALENDAR -->
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        max-width: 520px;
+        margin: auto;
+        background: #f0f3f8;
+    }
+
+    h2 {
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 28px;
+    }
+
+    label { 
+        font-weight: bold; 
+        margin-top: 12px; 
+        display: block; 
+        font-size: 18px;
+    }
+
+    input {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 14px;
+        margin-top: 6px;
+        border-radius: 10px;
+        border: 1px solid #ccc;
+        font-size: 18px;
+    }
+
+    /* Nút cộng/trừ tháng */
+    .btn-small {
+        padding: 12px 18px;
+        background: #8e44ad;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        margin: 10px 6px 0 0;
+        font-size: 16px;
+        min-width: 120px;
+    }
+
+    .btn-small.minus { background: #c0392b; }
+
+    /* Accordion */
+    .acc-header {
+        background: #dfe6e9;
+        padding: 14px;
+        border-radius: 10px;
+        margin-top: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        font-size: 17px;
+    }
+
+    .acc-header:hover { background: #b2bec3; }
+
+    .acc-header .arrow {
+        font-size: 20px;
+        margin-right: 12px;
+        transition: transform 0.25s ease;
+    }
+
+    .acc-header.open .arrow { transform: rotate(90deg); }
+
+    .acc-body {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.35s ease;
+        padding-left: 6px;
+    }
+
+    .acc-body-inner {
+        padding: 12px 0 6px 10px;
+    }
+
+    /* Nút tính toán / làm mới */
+    .btn-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 25px;
+    }
+
+    .btn-row button {
+        flex: 1;
+        padding: 16px;
+        font-size: 18px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+    }
+
+    .main-btn { background: #3498db; color: white; }
+    .main-btn:hover { background: #217dbb; }
+
+    .refresh-btn { background: #7f8c8d; color: white; }
+    .refresh-btn:hover { background: #636e72; }
+
+    /* Kết quả */
+    .result-box {
+        background: white;
+        border-radius: 14px;
+        padding: 24px;
+        margin-top: 25px;
+        font-size: 18px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 24px;
+        background: #e0e0e0;
+        border-radius: 12px;
+        overflow: hidden;
+        margin: 14px 0 18px 0;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: #27ae60;
+        width: 0%;
+        transition: width 0.35s ease;
+    }
+
+    .danger { color: red; font-weight: bold; }
+    .warning { color: #e67e22; font-weight: bold; }
+    .good { color: #27ae60; font-weight: bold; }
+
+    /* Lịch sử */
+    .history-box {
+        background: white;
+        border-radius: 12px;
+        padding: 14px;
+        margin-top: 25px;
+        font-size: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    /* ========================== */
+    /* 📱 TỐI ƯU CHO MOBILE */
+    /* ========================== */
+    @media (max-width: 480px) {
+
+		html, body {
+			font-size: 4.5vw;
+			padding: 0;
+			margin: 0;
+		}
+
+		body {
+			padding: 5vw;           /* đều trái – phải */
+			box-sizing: border-box; /* tránh tràn */
+		}
+
+		h2 {
+			font-size: 7vw;
+			margin: 0 0 5vw 0;
+			text-align: center;
+		}
+
+		label {
+			font-size: 5vw;
+			margin: 4vw 0 2vw 0;
+			display: block;
+		}
+
+		input {
+			width: 100%;
+			font-size: 5vw;
+			padding: 4vw;
+			border-radius: 3vw;
+			box-sizing: border-box;
+		}
+
+		/* Nút nhỏ trong accordion */
+		.btn-small {
+			font-size: 4.8vw;
+			padding: 4vw;
+			min-width: 32vw;
+			border-radius: 3vw;
+			margin: 3vw 3vw 0 0;
+		}
+
+		.acc-header {
+			font-size: 5.2vw;
+			padding: 4vw;
+			border-radius: 3vw;
+			margin-top: 4vw;
+			box-sizing: border-box;
+		}
+
+		.acc-header .arrow {
+			font-size: 6vw;
+			margin-right: 3vw;
+		}
+
+		.acc-body-inner {
+			padding: 4vw 0 2vw 3vw;
+		}
+
+		/* Dòng chứa 2 nút tính & làm mới */
+		.btn-row {
+			display: flex;
+			gap: 3vw;
+			margin-top: 5vw;
+		}
+
+		.btn-row button {
+			flex: 1;
+			font-size: 5vw;
+			padding: 5vw 0;
+			border-radius: 3vw;
+			box-sizing: border-box;
+			width: 100%;
+		}
+
+		.result-box {
+			padding: 5vw;
+			font-size: 5vw;
+			margin-top: 6vw;
+			border-radius: 3vw;
+			line-height: 1.55;
+		}
+
+		.progress-bar {
+			height: 7vw;
+			border-radius: 4vw;
+			margin: 4vw 0;
+			width: 100%;
+		}
+
+		.history-box {
+			padding: 4vw;
+			font-size: 4.5vw;
+			border-radius: 3vw;
+			margin-top: 8vw;
+		}
+	}
+	
+	select {
+		width: 100%;
+		padding: 14px;
+		margin-top: 6px;
+		border-radius: 10px;
+		border: 1px solid #ccc;
+		font-size: 18px;
+		background: white;
+	}
+
+	@media (max-width: 480px) {
+		select {
+			font-size: 5vw;
+			padding: 4vw;
+			border-radius: 3vw;
+		}
+	}
+	
+	.clear-history-btn {
+		background: #e74c3c;
+		color: white;
+		border: none;
+		border-radius: 8px;
+		padding: 9px 12px;
+		font-size: 14px;
+		cursor: pointer;
+	}
+
+	.clear-history-btn:hover {
+		background: #c0392b;
+	}
+
+	@media (max-width: 480px) {
+		.clear-history-btn {
+			font-size: 4vw;
+			padding: 3vw;
+			border-radius: 2.5vw;
+		}
+	}
+
+    .scan-card {background:#fff;border:1px solid #dce5f2;border-radius:18px;padding:18px;margin:0 0 22px;box-shadow:0 6px 20px rgba(25,53,92,.06)}
+    .scan-heading {display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;margin-bottom:9px;color:#15365a}
+    .scan-help {color:#596b80;line-height:1.5;font-size:14px;margin:0 0 12px}
+    .scan-actions {display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .scan-actions label {margin:0;font-size:15px;text-align:center;padding:12px 6px;border-radius:10px;background:#e8f2ff;color:#1759a5;cursor:pointer}
+    .scan-actions label:first-child {background:#2369ca;color:#fff}
+    .scan-actions input {display:none}
+    .scan-img {max-height:420px;max-width:100%;width:auto;height:auto;object-fit:contain;border-radius:12px;background:#eff3f8;display:block}
+    .scan-photo-stage {display:none;position:relative;margin-top:12px;line-height:0;max-width:100%;user-select:none;touch-action:none}
+    .scan-selection {position:absolute;left:0;top:0;width:100%;height:100%;cursor:crosshair;touch-action:none;border-radius:12px}
+    .scan-focus-tools {display:none;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;flex-wrap:wrap}
+    .scan-focus-tools button,.scan-example {border:1px solid #bad0e8;background:#f2f7ff;color:#1759a5;border-radius:9px;padding:9px 12px;font-size:13px;cursor:pointer}
+    .scan-result-raw {background:#f4f6fa;border:1px solid #e4e8ef;border-radius:8px;padding:10px;font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+    .scan-focus-tip {color:#49627f;font-size:12px;line-height:1.5;margin:6px 0 0}
+    .scan-config {margin-top:14px;padding-top:10px;border-top:1px solid #e5eaf0}
+    .scan-config summary {cursor:pointer;font-size:14px;color:#3e628d}
+    .scan-config input {font-size:14px;padding:10px;margin-top:8px}
+    .scan-action {width:100%;padding:12px;border:0;border-radius:10px;background:#157c62;color:#fff;font-size:16px;margin-top:12px;font-weight:700;cursor:pointer}
+    .scan-action:disabled {opacity:.55;cursor:wait}
+    .scan-action.busy {background:#245e9a}
+    .scan-live {display:none; margin-top:12px; background:#edf5ff; border:1px solid #c4dbf7; border-radius:12px; padding:12px 14px}
+    .scan-live.active {display:block}
+    .scan-live-top {display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+    .scan-live-top strong {font-size:22px;font-variant-numeric:tabular-nums;color:#134e87}
+    .scan-live-top span {color:#526b86;font-size:13px}
+    .scan-live-track {height:5px;border-radius:10px;margin-top:10px;background:#d7e6f8;overflow:hidden}
+    .scan-live-track i {height:100%;width:34%;display:block;background:#2374cc;border-radius:10px;animation:scanpulse 1.1s ease-in-out infinite alternate}
+    @keyframes scanpulse {from{transform:translateX(0)}to{transform:translateX(190%)}}
+    .scan-quick {display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:14px;color:#254963;line-height:1.5}
+    .scan-quick input {width:18px;height:18px;margin:2px 0 0;flex:none}
+    .scan-subtle {color:#60768c;font-size:12px;line-height:1.5;margin:7px 0 0}
+
+    .scan-status {font-size:14px;margin-top:10px;line-height:1.5;color:#3d5169;white-space:pre-wrap}
+    .scan-status.error {color:#b42318}
+    .scan-review {border-top:1px solid #e7ebf0;margin-top:14px;padding-top:12px;display:none}
+    .scan-review p {font-size:14px;margin:7px 0;line-height:1.5}
+    .scan-review strong {color:#15365a}
+    .scan-checks {font-size:14px;color:#7b4c09;background:#fff5df;padding:10px;border-radius:9px;margin-top:9px}
+    .scan-checks label {font-size:14px;margin:7px 0;display:flex;gap:8px;align-items:center}
+    .scan-checks input {width:auto;margin:0}
+    .scan-config {display:block}
+    .scan-config label {font-size:14px;margin-top:12px}
+    .scan-config select,.scan-config input {font-size:15px;padding:11px;border:1px solid #cfdae8;border-radius:9px}
+    .scan-config select {width:100%;box-sizing:border-box}
+    .scan-config input {width:100%;box-sizing:border-box}
+    .scan-metrics {font-size:13px;color:#34516e;background:#f1f6fc;padding:10px 12px;border-radius:9px;margin-top:10px;display:none;white-space:pre-wrap;line-height:1.55}
+    .scan-warning {font-size:13px;color:#8a470b;background:#fff2da;border:1px solid #f8d49c;padding:10px;border-radius:9px;margin-top:10px;line-height:1.55}
+    .scan-config .scan-quick input {width:18px;height:18px;min-width:18px;flex:0 0 18px;padding:0;margin:2px 0 0}
+    .scan-human-check {margin:5px 0;min-height:1px}
+    .scan-safe-notice {background:#eef8f4;border:1px solid #cee7dc;color:#20684e;border-radius:10px;padding:11px;font-size:13px;line-height:1.5}
+    .scan-live.done .scan-live-track i {animation:none;transform:none;width:100%;background:#15816f}
+    .scan-config .scan-help {margin:8px 0 0}
+    @media(max-width:480px) {.scan-card {padding:14px}.scan-actions label {font-size:14px}.scan-heading {font-size:19px}}
+
+    /* Chế độ một thao tác: chụp/chọn ảnh -> AI -> tính */
+    .scan-oneclick {display:block;margin:12px 0 8px;padding:17px 14px;border-radius:14px;
+        background:#1668c5;color:#fff;text-align:center;font-size:18px;font-weight:750;
+        cursor:pointer;box-shadow:0 4px 12px rgba(21,92,184,.17)}
+    .scan-oneclick:hover {background:#0958ae}
+    .scan-oneclick input {display:none}
+    .scan-card .scan-more {margin-top:12px;border:1px solid #e1e7ef;border-radius:10px;padding:9px 12px;background:#fff}
+    .scan-card .scan-more summary {cursor:pointer;color:#28567b;font-weight:650;font-size:14px;line-height:1.4}
+    .scan-config {margin-top:15px}
+    .scan-config label {font-size:14px}
+    .scan-config .scan-quick {font-size:13px}
+    .scan-dates {display:flex;gap:14px;flex-wrap:wrap;padding:10px;background:#f4f9ff;border-radius:10px;font-size:14px}
+    .scan-dates b {color:#174e87}
+    .scan-retry {background:#eff5ff;color:#155ca7;border:1px solid #c8d9ef;font-size:14px;padding:10px;margin-top:10px}
+    .scan-retry.busy {background:#edf3ff;color:#2464a6}
+    .scan-metrics-details {padding:8px 12px!important}
+    .scan-metrics-details .scan-metrics {display:block!important;margin-top:8px}
+    .scan-photo-stage {margin-top:12px}
+    .scan-card .scan-warning {margin:12px 0 2px}
+    @media(max-width:480px){.scan-oneclick{font-size:17px}}
+
+    /* Nút cài đặt ngoài cùng: phần thông tin AI chỉ hiện khi chủ động mở. */
+    .scan-toolbar {display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .scan-toolbar .scan-heading {margin:0;min-width:0;flex:1}
+    .scan-settings-toggle {flex:0 0 auto;border:1px solid #bed2e9;border-radius:10px;
+        background:#f0f6ff;color:#174f86;padding:9px 12px;font-size:14px;
+        font-weight:700;cursor:pointer;white-space:nowrap}
+    .scan-settings-toggle:hover, .scan-settings-toggle[aria-expanded="true"]
+        {background:#e0edff;border-color:#91b9e9}
+    .scan-settings-toggle:focus-visible {outline:3px solid #70b0ff;outline-offset:2px}
+    .scan-advanced {border-top:1px solid #e4ebf3;margin-top:13px;padding-top:3px}
+    .scan-advanced[hidden], .scan-compact-status[hidden] {display:none!important}
+    .scan-compact-status {font-size:13px;line-height:1.5;color:#285577;margin:9px 1px 0}
+    .scan-compact-status.error {color:#aa2f26}
+    @media(max-width:480px) {
+        .scan-toolbar .scan-heading {font-size:17px}
+        .scan-settings-toggle {font-size:13px;padding:9px 10px}
+    }
+</style>
+</head>
+
+<body>
+
+<h2>🧮 Tính Hạn Sử Dụng</h2>
+
+
+<section class="scan-card" aria-labelledby="scan-title">
+    <div class="scan-toolbar">
+      <div id="scan-title" class="scan-heading">📷 Đọc ảnh &amp; tính hạn ngay</div>
+      <button type="button" id="scanSettingsToggle" class="scan-settings-toggle"
+        aria-controls="scanAdvancedPanel" aria-expanded="false" onclick="toggleScanSettings()">⚙️ Cài đặt</button>
+    </div>
+    <p class="scan-help">Chọn hoặc chụp ảnh có chữ NSX/HSD. AI sẽ tự đọc, điền ngày và tính hạn sử dụng nếu kết quả rõ ràng và hợp lệ.</p>
+    <label class="scan-oneclick" for="photoGallery">📸 Chụp / Chọn ảnh để tính
+      <input id="photoGallery" type="file" accept="image/*">
+    </label>
+    <div id="scanHumanCheck" class="scan-human-check" aria-label="Xác thực bảo vệ dịch vụ AI"></div>
+    <div id="scanCompactStatus" class="scan-compact-status" role="status" aria-live="polite" hidden></div>
+    <div id="scanAdvancedPanel" class="scan-advanced" hidden>
+    <div id="scanLive" class="scan-live" aria-live="off">
+      <div class="scan-live-top"><strong id="liveElapsed">0 ms</strong><span id="livePhase">Sẵn sàng</span></div>
+      <div class="scan-live-track"><i></i></div>
+    </div>
+    <div id="scanStatus" role="status" aria-live="polite" class="scan-status">Sẵn sàng đọc ảnh qua Supabase Edge Function.</div>
+    <div id="scanReview" class="scan-review">
+      <div class="scan-dates"><span>NSX: <b id="foundMfg">—</b></span><span>HSD: <b id="foundExp">—</b></span></div>
+      <details class="scan-more">
+        <summary>Xem chữ AI đọc được và ghi chú</summary>
+        <p><strong>Hạn dùng ghi trên nhãn:</strong> <span id="foundMonths">—</span></p>
+        <p><strong>Độ tin cậy AI tự đánh giá:</strong> <span id="foundConfidence">—</span></p>
+        <div id="foundRaw" class="scan-result-raw">—</div>
+        <p id="foundNotes"></p>
+      </details>
+    </div>
+    <details id="scanFocusDetails" class="scan-more" style="display:none">
+      <summary>Ảnh đã chọn · Khoanh vùng chữ nếu AI đọc khó</summary>
+      <div id="scanPhotoStage" class="scan-photo-stage">
+        <img id="scanPreview" class="scan-img" alt="Ảnh sản phẩm, kéo chọn vùng NSX/HSD nếu cần">
+        <canvas id="scanSelectionOverlay" class="scan-selection" aria-label="Khoanh vùng chữ NSX và HSD"></canvas>
+      </div>
+      <div id="scanFocusTools" class="scan-focus-tools">
+        <span id="scanFocusLabel" class="scan-focus-tip">Kéo khoanh vùng chữ NSX/HSD</span>
+        <button type="button" onclick="clearScanSelection()">Xóa vùng chọn</button>
+      </div>
+      <p class="scan-focus-tip">Với chữ in chấm như chai Pepsi, kéo vùng chứa cả NSX và HSD rồi chọn Đọc lại ảnh.</p>
+    </details>
+    <button type="button" id="scanStart" class="scan-action scan-retry" onclick="scanDateImage()" disabled style="display:none">🔄 Đọc lại ảnh &amp; tính</button>
+    <details id="scanSettings" class="scan-config scan-more">
+      <summary>⚙️ Tùy chỉnh đọc ảnh</summary>
+      <p class="scan-safe-notice">🔒 OpenAI API key được lưu an toàn trong Supabase Secrets, không có trong website và không cần người dùng nhập khóa.</p>
+      <label class="scan-quick" for="scanEnhanceDots"><input id="scanEnhanceDots" type="checkbox" checked> Tăng tương phản vùng khoanh</label>
+      <label for="imageMode">Chất lượng xử lý ảnh</label>
+      <select id="imageMode">
+        <option value="balanced" selected>Rõ chữ (khuyên dùng)</option>
+        <option value="fast">Ảnh gọn (nhanh hơn)</option>
+        <option value="max">Giữ chi tiết tối đa</option>
+      </select>
+      <p class="scan-subtle">Mô hình AI và hạn mức sử dụng do quản trị viên cấu hình trên Supabase. Ảnh chỉ được gửi khi bạn chọn hoặc chụp ảnh.</p>
+    </details>
+    <details class="scan-more scan-metrics-details" id="metricsDetails"><summary>⏱ Chi tiết tốc độ xử lý (ms)</summary>
+      <div id="scanMetrics" class="scan-metrics" role="status" aria-live="polite"></div>
+    </details>
+    </div><!-- /scanAdvancedPanel: trạng thái, ngày đọc, ảnh và cấu hình AI -->
+</section>
+
+<label>Ngày sản xuất (MFG)</label>
+<input id="mfg" placeholder="dd/mm/yyyy" inputmode="numeric">
+
+<!-- HẠN SỬ DỤNG TỐT NHẤT -->
+<label>Chọn kiểu hạn sử dụng</label>
+<select id="hsdMode" onchange="toggleHsdMode()">
+    <option value="best">Hạn sử dụng tốt nhất</option>
+    <option value="date">Hạn sử dụng cụ thể</option>
+</select>
+
+<div id="bestHsdBox">
+    <label>Hạn sử dụng tốt nhất</label>
+    <input id="bestMonth" type="number" placeholder="Ví dụ: 6 = 6 tháng" inputmode="numeric">
+</div>
+
+<div id="dateHsdBox" style="display:none;">
+    <label>Hạn sử dụng (EXP)</label>
+    <input id="exp" placeholder="dd/mm/yyyy" inputmode="numeric">
+</div>
+
+<!-- COMBO BOX TÍNH NGƯỢC EXP → MFG (ẩn mặc định) -->
+<div id="reverseBox" style="display:none; margin-top: 12px;">
+    <label>Chọn hạn dùng để tính ngược MFG</label>
+    <select id="hsdSelect" onchange="reverseCalcMFG()">
+        <option value="">-- Chọn HSD --</option>
+		<option value="3">3 tháng</option>
+        <option value="6">6 tháng</option>
+		<option value="7">7 tháng</option>
+        <option value="9">9 tháng</option>
+        <option value="12">12 tháng (1 năm)</option>
+        <option value="24">24 tháng (2 năm)</option>
+        <option value="36">36 tháng (3 năm)</option>
+        <option value="48">48 tháng (4 năm)</option>
+        <option value="60">60 tháng (5 năm)</option>
+		<option value="84">84 tháng (7 năm)</option>
+    </select>
+</div>
+
+<!-- NÚT TÍNH + LÀM MỚI -->
+<div class="btn-row">
+    <button class="main-btn" onclick="calc()">Tính Toán</button>
+    <button class="refresh-btn" onclick="resetAll()">Làm mới</button>
+</div>
+
+<div id="result"></div>
+
+<script src="./config.js"></script>
+<script>
+
+// ========== AI Vision: đọc ngay + đo độ trễ ở mức mili giây ===========
+let chosenScanFile = null;
+let scanObjectUrl = null;
+let scanSelection = null; // normalized coordinates x,y,w,h from 0..1
+let selectionDrag = null;
+let recognizedDates = null;
+let preparedScanImage = null;
+let activeScanController = null;
+let scanGeneration = 0;
+let scanTimer = null;
+const scanStatusEl = document.getElementById('scanStatus');
+const scanMetricsEl = document.getElementById('scanMetrics');
+const scanStartEl = document.getElementById('scanStart');
+const PUBLIC_CONFIG = window.HSD_CONFIG || {};
+const scanLiveEl = document.getElementById('scanLive');
+const liveElapsedEl = document.getElementById('liveElapsed');
+const livePhaseEl = document.getElementById('livePhase');
+const scanPhotoStage = document.getElementById('scanPhotoStage');
+const scanPreviewImg = document.getElementById('scanPreview');
+const scanSelectionOverlay = document.getElementById('scanSelectionOverlay');
+const scanAdvancedPanel = document.getElementById('scanAdvancedPanel');
+const scanSettingsToggle = document.getElementById('scanSettingsToggle');
+const scanCompactStatus = document.getElementById('scanCompactStatus');
+
+// Mặc định giữ phần chi tiết ẩn để giao diện chỉ cần một nút chụp/chọn ảnh.
+// Chỉ thao tác với giao diện; không ảnh hưởng tiến trình đọc ảnh hoặc tính toán.
+function toggleScanSettings() {
+    const opening = scanAdvancedPanel.hidden;
+    scanAdvancedPanel.hidden = !opening;
+    scanSettingsToggle.setAttribute('aria-expanded', String(opening));
+    scanSettingsToggle.textContent = opening ? '✕ Đóng' : '⚙️ Cài đặt';
+    if (opening) requestAnimationFrame(syncScanSelectionCanvas);
+}
+// Endpoint và site key công khai; tuyệt đối KHÔNG để OpenAI key trong website.
+function configuredBackend() {
+    try {
+        const endpoint = new URL(String(PUBLIC_CONFIG.functionUrl || ''));
+        return endpoint.protocol === 'https:' && /\/functions\/v1\/read-expiry-date\/?$/.test(endpoint.pathname) &&
+            /^[a-zA-Z0-9_-]{10,200}$/.test(String(PUBLIC_CONFIG.captchaSiteKey || '')) &&
+            !/THAY_|EXAMPLE|your-project/i.test(endpoint.host);
+    } catch { return false; }
+}
+let captchaWidgetId = null;
+let captchaWaiter = null;
+function onHsdCaptchaReady() {
+    if (!configuredBackend() || !window.hcaptcha) return;
+    try {
+        captchaWidgetId = window.hcaptcha.render('scanHumanCheck', {
+            sitekey: PUBLIC_CONFIG.captchaSiteKey,
+            size: 'invisible',
+            callback: token => { if (captchaWaiter) captchaWaiter.resolve(token); },
+            'expired-callback': () => { if (captchaWaiter) captchaWaiter.reject(new Error('Xác minh đã hết hạn.')); },
+            'error-callback': () => { if (captchaWaiter) captchaWaiter.reject(new Error('Không xác minh được hCaptcha.')); }
+        });
+    } catch (e) {
+        scanMessage('Không khởi tạo được hCaptcha: '+e.message, true);
+    }
+}
+function waitCaptchaToken(signal) {
+    return new Promise((resolve,reject) => {
+        if (captchaWidgetId === null || !window.hcaptcha) {
+            reject(new Error('hCaptcha chưa sẵn sàng. Hãy thử tải lại trang hoặc tắt tiện ích chặn CAPTCHA.'));
+            return;
+        }
+        let settled = false;
+        let timer = null;
+        const finish = (error, token) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            signal.removeEventListener('abort', onAbort);
+            if (captchaWaiter === waiter) captchaWaiter = null;
+            error ? reject(error) : resolve(token);
+        };
+        const onAbort = () => finish(new DOMException('Yêu cầu đã hủy', 'AbortError'));
+        const waiter = {
+            resolve: token => finish(null, token),
+            reject: err => finish(err instanceof Error ? err : new Error(String(err)))
+        };
+        captchaWaiter = waiter;
+        timer = setTimeout(() => finish(new Error('Xác minh hCaptcha quá thời gian 45 giây.')),45000);
+        signal.addEventListener('abort',onAbort,{once:true});
+        if (signal.aborted) return onAbort();
+        try { window.hcaptcha.execute(captchaWidgetId); }
+        catch(e) { finish(new Error('Không thể bắt đầu xác minh: '+e.message)); }
+    });
+}
+function resetCaptcha() {
+    if (captchaWidgetId !== null && window.hcaptcha) {
+        try { window.hcaptcha.reset(captchaWidgetId); } catch(e) { /* Có thể widget đã được reset */ }
+    }
+}
+function scanMessage(message, isError = false) {
+    scanStatusEl.textContent = message;
+    scanStatusEl.classList.toggle('error', isError);
+    // Chỉ hiện trạng thái một dòng ở ngoài; mọi chi tiết/ảnh/ms nằm trong Cài đặt.
+    let shortText;
+    if (/tự điền và tính xong/.test(message)) {
+        shortText = '✅ Đã đọc ảnh và tính xong. Kiểm tra ngày và kết quả bên dưới.';
+    } else if (/Đang đọc ảnh/.test(message)) {
+        shortText = '⏳ AI đang đọc ảnh và tự tính...';
+    } else if (isError) {
+        shortText = '⚠️ ' + message.replace(/^⚠️?\s*/, '');
+    } else if (/Đã chọn ảnh|Ảnh đã sẵn sàng/.test(message)) {
+        shortText = '🖼 Đã chọn ảnh, đang chuẩn bị nhận diện...';
+    } else {
+        shortText = message;
+    }
+    scanCompactStatus.hidden = false;
+    scanCompactStatus.textContent = shortText;
+    scanCompactStatus.classList.toggle('error', isError);
+}
+function scanEndTimer() {
+    if (scanTimer !== null) { clearInterval(scanTimer); scanTimer = null; }
+}
+function scanStartTimer(t0) {
+    scanEndTimer();
+    scanLiveEl.classList.remove('done');
+    scanLiveEl.classList.add('active');
+    liveElapsedEl.textContent = '0 ms';
+    scanTimer = setInterval(() => {
+        liveElapsedEl.textContent = Math.round(performance.now() - t0).toLocaleString('vi-VN') + ' ms';
+    }, 50);
+}
+function cancelRunningScan() {
+    scanGeneration++;
+    if (activeScanController) activeScanController.abort();
+    activeScanController = null;
+    scanEndTimer();
+    scanStartEl.classList.remove('busy');
+    scanLiveEl.classList.remove('active');
+    scanStartEl.textContent = '🔄 Đọc lại ảnh & tính';
+    scanStartEl.disabled = !chosenScanFile;
+}
+function resetRecognition() {
+    recognizedDates = null;
+    scanMetricsEl.style.display = 'none';
+    document.getElementById('scanReview').style.display = 'none';
+}
+// Manual ROI selection: normalized coordinates align with displayed image and source pixels.
+function syncScanSelectionCanvas() {
+    const rect = scanPreviewImg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const ratio = window.devicePixelRatio || 1;
+    scanSelectionOverlay.width = Math.round(rect.width * ratio);
+    scanSelectionOverlay.height = Math.round(rect.height * ratio);
+    scanSelectionOverlay.style.width = rect.width+'px';
+    scanSelectionOverlay.style.height = rect.height+'px';
+    const c = scanSelectionOverlay.getContext('2d');
+    c.setTransform(ratio,0,0,ratio,0,0);
+    c.clearRect(0,0,rect.width,rect.height);
+    const box = selectionDrag ? dragToSelection(selectionDrag.a,selectionDrag.b) : scanSelection;
+    if (!box) return;
+    const x=box.x*rect.width,y=box.y*rect.height,w=box.w*rect.width,h=box.h*rect.height;
+    c.fillStyle='rgba(13,102,212,.13)'; c.fillRect(x,y,w,h);
+    c.strokeStyle='#136ad3'; c.lineWidth=3; c.setLineDash([8,4]);
+    c.strokeRect(x,y,w,h); c.setLineDash([]);
+}
+function dragToSelection(a,b) {
+    return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),
+      w:Math.abs(a.x-b.x),h:Math.abs(a.y-b.y)};
+}
+function scanPointFromEvent(e) {
+    const rect=scanSelectionOverlay.getBoundingClientRect();
+    return {x:Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width)),
+      y:Math.max(0,Math.min(1,(e.clientY-rect.top)/rect.height))};
+}
+scanSelectionOverlay.addEventListener('pointerdown', e => {
+    if (!chosenScanFile) return;
+    e.preventDefault();
+    scanSelectionOverlay.setPointerCapture(e.pointerId);
+    selectionDrag={a:scanPointFromEvent(e),b:scanPointFromEvent(e)};
+    syncScanSelectionCanvas();
+});
+scanSelectionOverlay.addEventListener('pointermove', e => {
+    if (!selectionDrag) return;
+    selectionDrag.b=scanPointFromEvent(e);
+    syncScanSelectionCanvas();
+});
+function completeSelection(e) {
+    if (!selectionDrag) return;
+    selectionDrag.b=scanPointFromEvent(e);
+    const roi=dragToSelection(selectionDrag.a,selectionDrag.b);
+    selectionDrag=null;
+    if (roi.w>0.03 && roi.h>0.025) {
+        scanSelection=roi;
+        document.getElementById('scanFocusLabel').textContent='✓ Đã chọn vùng ngày; bấm Đọc lại ảnh để phân tích vùng này';
+    } else scanSelection=null;
+    cancelRunningScan();
+    preparedScanImage=null;
+    resetRecognition();
+    document.getElementById('result').innerHTML = '';
+    scanMessage('Đã thay đổi vùng chữ; bấm Đọc lại ảnh & tính để cập nhật kết quả.');
+    syncScanSelectionCanvas();
+}
+scanSelectionOverlay.addEventListener('pointerup',completeSelection);
+scanSelectionOverlay.addEventListener('pointercancel',() => {selectionDrag=null;syncScanSelectionCanvas();});
+window.addEventListener('resize',syncScanSelectionCanvas);
+document.getElementById('scanFocusDetails').addEventListener('toggle', () => { requestAnimationFrame(syncScanSelectionCanvas); });
+function clearScanSelection() {
+    cancelRunningScan();
+    scanSelection=null; selectionDrag=null;
+    preparedScanImage=null; resetRecognition();
+    document.getElementById('scanFocusLabel').textContent='Kéo khoanh vùng chữ NSX/HSD (không bắt buộc)';
+    syncScanSelectionCanvas();
+}
+// Generate a high-resolution ROI; the second view enhances ink dots while retaining a color view.
+function canvasDataURL(canvas,quality=.91) {return canvas.toDataURL('image/jpeg',quality);}
+function createInkEnhancedCanvas(base) {
+    const enhanced=document.createElement('canvas');
+    enhanced.width=base.width;enhanced.height=base.height;
+    const ctx=enhanced.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(base,0,0);
+    const img=ctx.getImageData(0,0,enhanced.width,enhanced.height);
+    const d=img.data;
+    // Gentle grayscale+contrast, not a binary threshold; avoid destroying faint dots.
+    for(let i=0;i<d.length;i+=4) {
+        const lum=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+        const contrast=Math.min(255,Math.max(0,(lum-127)*1.45+127));
+        d[i]=d[i+1]=d[i+2]=contrast;
+    }
+    ctx.putImageData(img,0,0);
+    return enhanced;
+}
+function createRoiDataURL(img,roi,enhance) {
+    // 5% margin avoids cutting MFG/EXP and date digits at the rectangle edge.
+    const x=Math.max(0,roi.x-roi.w*.05),y=Math.max(0,roi.y-roi.h*.08);
+    const w=Math.min(1-x,roi.w*1.1),h=Math.min(1-y,roi.h*1.16);
+    const sx=Math.round(x*img.naturalWidth),sy=Math.round(y*img.naturalHeight);
+    const sw=Math.max(1,Math.round(w*img.naturalWidth)),sh=Math.max(1,Math.round(h*img.naturalHeight));
+    // Upscaling does not create missing text detail, but avoids too-small model view.
+    const scale=Math.min(3,1200/sw,1800/sh);
+    const color=document.createElement('canvas');
+    color.width=Math.round(sw*scale);color.height=Math.round(sh*scale);
+    const ctx=color.getContext('2d');
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    ctx.drawImage(img,sx,sy,sw,sh,0,0,color.width,color.height);
+    if (!enhance) return {dataUrl:canvasDataURL(color,.92),width:color.width,height:color.height,views:1};
+    const gray=createInkEnhancedCanvas(color);
+    const composite=document.createElement('canvas');
+    composite.width=Math.max(color.width,gray.width);composite.height=color.height+gray.height+40;
+    const cc=composite.getContext('2d');
+    cc.fillStyle='white';cc.fillRect(0,0,composite.width,composite.height);
+    cc.drawImage(color,0,0);cc.drawImage(gray,0,color.height+40);
+    return {dataUrl:canvasDataURL(composite,.91),width:composite.width,height:composite.height,views:2};
+}
+async function buildRoiImage(file,roi,enhance) {
+    return new Promise((resolve,reject)=> {
+        const img=new Image();
+        const u=URL.createObjectURL(file);
+        img.onload=()=>{
+            URL.revokeObjectURL(u);
+            try { resolve(createRoiDataURL(img,roi,enhance)); }
+            catch(e) { reject(e); }
+        };
+        img.onerror=()=>{URL.revokeObjectURL(u);reject(new Error('Không đọc được ảnh để cắt vùng chữ.'));};
+        img.src=u;
+    });
+}
+function onScanFile(file, initialRoi=null) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return scanMessage('Vui lòng chọn tệp ảnh JPG, PNG hoặc ảnh chụp.', true);
+    if (file.size > 12 * 1024 * 1024) return scanMessage('Ảnh không được lớn hơn 12 MB.', true);
+    cancelRunningScan();
+    chosenScanFile = file;
+    scanSelection = initialRoi;selectionDrag=null;
+    preparedScanImage = null;
+    resetRecognition();
+    document.getElementById('result').innerHTML = '';
+    document.getElementById('mfg').value = '';
+    document.getElementById('mfg').readOnly = false;
+    document.getElementById('exp').value = '';
+    document.getElementById('bestMonth').value = '';
+    document.getElementById('hsdMode').value = 'best';
+    toggleHsdMode();
+    updateReverseBox();
+    if (scanObjectUrl) URL.revokeObjectURL(scanObjectUrl);
+    scanObjectUrl = URL.createObjectURL(file);
+    const img = document.getElementById('scanPreview');
+    scanPhotoStage.style.display='inline-block';
+    document.getElementById('scanFocusTools').style.display='flex';
+    document.getElementById('scanFocusDetails').style.display='block';
+    scanStartEl.style.display='block';
+    document.getElementById('scanFocusLabel').textContent=scanSelection?'✓ Đã khoanh vùng chữ NSX/HSD':'Kéo khoanh vùng chữ NSX/HSD (không bắt buộc)';
+    img.onload=syncScanSelectionCanvas;
+    img.src = scanObjectUrl;
+    scanStartEl.disabled = false;
+    scanMessage('Đã chọn ảnh. Đang chuẩn bị ảnh để đọc...');
+    const generation = scanGeneration;
+    const options = document.getElementById('imageMode').value;
+    const prepareStarted = performance.now();
+    const task = prepareScanImage(file, options).then(processed => {
+        if (configuredBackend() && generation === scanGeneration && chosenScanFile === file && !activeScanController) {
+            scanMessage('Ảnh đã sẵn sàng. Chọn Đọc lại ảnh & tính để nhận diện.');
+        }
+        return {...processed, prepareMs: performance.now() - prepareStarted};
+    });
+    // Bắt đầu chuẩn bị ngay từ khi chọn ảnh; các lỗi chỉ báo khi đọc.
+    preparedScanImage = {file, options, promise:task};
+    task.catch(() => {}); // Preload chạy trước khi người dùng nhấn đọc; lỗi vẫn được báo khi await.
+    scanDateImage();
+}
+document.getElementById('photoGallery').addEventListener('change', e => {
+    onScanFile(e.target.files[0]);
+    e.target.value = '';
+});
+document.getElementById('imageMode').addEventListener('change', () => { preparedScanImage = null; });
+document.getElementById('scanEnhanceDots').addEventListener('change', () => { preparedScanImage = null; });
+// Browser native canvas (không cài OCR hay thư viện phụ).
+function prepareScanImage(file, mode) {
+    const maxDimension = mode === 'fast' ? 1536 : mode === 'max' ? 3200 : 2400;
+    const quality = mode === 'fast' ? .77 : mode === 'max' ? .91 : .85;
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const src = URL.createObjectURL(file);
+        img.onload = () => {
+            const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { URL.revokeObjectURL(src); return reject(new Error('Không thể xử lý ảnh trên thiết bị.')); }
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(src);
+            canvas.toBlob(blob => {
+                if (!blob) return reject(new Error('Không thể nén ảnh.'));
+                const reader = new FileReader();
+                reader.onload = () => resolve({dataUrl:reader.result, sizeKB:Math.round(blob.size/1024), width:canvas.width, height:canvas.height});
+                reader.onerror = () => reject(new Error('Không đọc được ảnh sau khi nén.'));
+                reader.readAsDataURL(blob);
+            }, 'image/jpeg', quality);
+        };
+        img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('Không thể mở ảnh. Hãy dùng ảnh JPG hoặc PNG.')); };
+        img.src = src;
+    });
+}
+function normalizedDate(value) {
+    if (typeof value !== 'string' || !value.trim()) return '';
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (!match) return '';
+    const y = +match[1], m = +match[2], d = +match[3];
+    const date = new Date(y, m - 1, d);
+    if (y < 1900 || y > 2200 || date.getFullYear() !== y || date.getMonth() !== m-1 || date.getDate() !== d) return '';
+    return String(d).padStart(2,'0') + '/' + String(m).padStart(2,'0') + '/' + y;
+}
+function createScanPayload(imageDataUrl, roiDataUrl, captchaToken) {
+    return {image:imageDataUrl, roi:roiDataUrl || null, captchaToken};
+}
+function readOpenAIResult(raw) {
+    if (raw && raw.result && typeof raw.result === 'object' && !Array.isArray(raw.result)) return raw.result;
+
+    const content = (raw.output || []).flatMap(item => item.content || []);
+    const outputText = content.filter(part => part.type === 'output_text').map(part => part.text).join('');
+    if (content.find(part => part.type === 'refusal')) throw new Error('AI từ chối phân tích ảnh.');
+    if (!outputText) throw new Error('AI không trả về nội dung ngày. Hãy thử lại với ảnh sắc nét hơn.');
+    let data;
+    try { data = JSON.parse(outputText); } catch { throw new Error('AI trả dữ liệu không phải JSON.'); }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Phản hồi không hợp lệ.');
+    return data;
+}
+function scanErrorFromStatus(status, errObj) {
+    const messages = {
+        400:'Yêu cầu ảnh không hợp lệ; hãy thử ảnh khác hoặc nhỏ hơn.',
+        401:'Phiên làm việc không hợp lệ.',403:'Yêu cầu không được phép. Kiểm tra tên miền hoặc hCaptcha.',
+        404:'Không tìm thấy Supabase Edge Function.',
+        413:'Ảnh quá lớn; chọn xử lý “Ảnh gọn” hoặc chọn vùng nhỏ hơn.',
+        422:'AI chưa thể nhận diện ảnh này.',
+        429:'Đã vượt giới hạn lượt đọc. Hãy thử lại sau.',
+        500:'Máy chủ chưa được cấu hình.',502:'Không nhận được kết quả từ dịch vụ AI.',503:'Dịch vụ nhận diện đang bận.'
+    };
+    const detail = errObj && errObj.error && typeof errObj.error.message === 'string'
+        ? errObj.error.message.slice(0,180) : '';
+    return (messages[status] || 'Lỗi API HTTP '+status) + ([400,403,422,429,502,503].includes(status) && detail ? ' '+detail : '');
+}
+// Lấy đúng ngày in trên nhãn, giúp tránh tự tính nếu ngày chuẩn hóa lệch chuỗi AI đọc.
+function dateFromRawPrint(raw) {
+    if (typeof raw !== 'string' || /[?？]/.test(raw)) return '';
+    let match = /(?:^|\D)(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})(?!\d)/.exec(raw);
+    if (!match) match = /(?:^|\D)(\d{2})(\d{2})(\d{4}|\d{2})(?!\d)/.exec(raw);
+    if (!match) return '';
+    const day=Number(match[1]), month=Number(match[2]);
+    const yyyy=match[3].length===2 ? 2000+Number(match[3]) : Number(match[3]);
+    return normalizedDate(`${yyyy}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`);
+}
+function validateAutoScan(data,mfg,exp,months) {
+    // confidence là AI tự đánh giá, chỉ sử dụng như một dấu hiệu; không coi là xác suất chính xác.
+    if (!['high','medium'].includes(data.confidence)) return 'Độ tin cậy thấp; cần kiểm tra và nhập ngày thủ công.';
+    if (!mfg) return 'Chưa đọc đủ ngày sản xuất nên chưa thể tính tự động.';
+    if (!exp && !months) return 'Chưa đọc đủ HSD hoặc số tháng sử dụng.';
+    if (dateFromRawPrint(data.mfg_raw) !== mfg)
+        return 'Ngày sản xuất không khớp với dòng chữ in mà AI đọc được.';
+    if (exp && dateFromRawPrint(data.exp_raw) !== exp)
+        return 'Hạn sử dụng không khớp với dòng chữ in mà AI đọc được.';
+    if (exp && parseDMY(mfg) >= parseDMY(exp)) return 'NSX phải trước HSD.';
+    if (/không chắc|không rõ|khó đọc|đoán|mờ|không thể xác định/i.test(String(data.notes || '')))
+        return 'AI còn nghi ngờ ký tự trên nhãn; cần kiểm tra lại ảnh.';
+    return '';
+}
+function autoFillAndCalculate(mfg, exp, months) {
+    const mfgEl=document.getElementById('mfg');
+    mfgEl.readOnly=false;
+    mfgEl.value=mfg;
+    if (exp) {
+        document.getElementById('hsdMode').value='date';
+        toggleHsdMode();
+        document.getElementById('exp').value=exp;
+    } else {
+        document.getElementById('hsdMode').value='best';
+        toggleHsdMode();
+        document.getElementById('bestMonth').value=months;
+    }
+    updateReverseBox();
+    return calc({silent:true});
+}
+async function scanDateImage() {
+    if (!chosenScanFile) return scanMessage('Vui lòng chọn ảnh trước.', true);
+    if (!configuredBackend()) return scanMessage('Chưa cấu hình Supabase Edge Function và hCaptcha Site Key. Kiểm tra file config.js.', true);
+    // Hủy bản đọc cũ (nếu có) và bỏ qua mọi phản hồi cũ.
+    if (activeScanController) activeScanController.abort();
+    scanGeneration++;
+    const job = scanGeneration;
+    const controller = new AbortController();
+    activeScanController = controller;
+    resetRecognition();
+    scanStartEl.disabled = true;
+    scanStartEl.classList.add('busy');
+    scanStartEl.textContent = '⏳ Đang đọc ảnh...';
+    scanMessage('Đang đọc ảnh. Kết quả sẽ tự xuất hiện khi API phản hồi.');
+    const t0 = performance.now();
+    let prepareMs = 0, requestMs = 0, parseMs = 0;
+    scanStartTimer(t0);
+    let timeout = null;
+    try {
+        livePhaseEl.textContent = 'Chuẩn bị ảnh';
+        let model = 'Máy chủ quản lý';
+        const imageMode = document.getElementById('imageMode').value;
+        let task = preparedScanImage;
+        if (!task || task.file !== chosenScanFile || task.options !== imageMode) {
+            const file = chosenScanFile;
+            const start = performance.now();
+            task = {file,options:imageMode,promise:prepareScanImage(file,imageMode).then(r => ({...r,prepareMs:performance.now()-start}))};
+            preparedScanImage = task;
+        }
+        const processed = await task.promise;
+        if (controller.signal.aborted || job !== scanGeneration) return;
+        prepareMs = processed.prepareMs;
+        let roiImage=null;
+        if (scanSelection) {
+            const roiStart=performance.now();
+            roiImage=await buildRoiImage(chosenScanFile,scanSelection,
+                document.getElementById('scanEnhanceDots').checked);
+            if (controller.signal.aborted || job !== scanGeneration) return;
+            prepareMs += performance.now()-roiStart;
+        }
+        livePhaseEl.textContent = 'Xác minh hCaptcha';
+        const token = await waitCaptchaToken(controller.signal);
+        if (controller.signal.aborted || job !== scanGeneration) return;
+        livePhaseEl.textContent = 'Đang nhận diện qua Supabase';
+        timeout = setTimeout(() => controller.abort(), 90000);
+        const apiStart = performance.now();
+        // Token được sử dụng một lần; reset để lần đọc sau có token mới.
+        const payload = createScanPayload(processed.dataUrl,roiImage && roiImage.dataUrl,token);
+        const response = await fetch(PUBLIC_CONFIG.functionUrl, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(payload),
+            cache:'no-store', signal:controller.signal
+        });
+        const raw = await response.json().catch(() => ({}));
+        requestMs = performance.now() - apiStart;
+        if (job !== scanGeneration) return;
+        if (!response.ok) throw new Error(scanErrorFromStatus(response.status, raw));
+        const parseStart = performance.now();
+        livePhaseEl.textContent = 'Kiểm tra kết quả';
+        const data = readOpenAIResult(raw);
+        model = String(raw.model || model);
+        const mfg = normalizedDate(data.mfg), exp = normalizedDate(data.exp);
+        const mt = typeof data.months === 'string' ? data.months.trim() : '';
+        const mn = /^\d{1,3}$/.test(mt) ? +mt : 0;
+        const months = mn >= 1 && mn <= 240 ? mn : 0;
+        let note = String(data.notes || '').slice(0,500);
+        if (mfg && exp && parseDMY(mfg) > parseDMY(exp)) {
+            note = 'CẢNH BÁO: NSX sau HSD; cần kiểm tra lại ảnh. ' + note;
+        }
+        recognizedDates = {mfg,exp,months};
+        document.getElementById('foundRaw').textContent='NSX: '+String(data.mfg_raw || 'Không đọc được')
+          +'\nHSD: '+String(data.exp_raw || 'Không đọc được');
+        document.getElementById('foundMfg').textContent = mfg || 'Không xác định';
+        document.getElementById('foundExp').textContent = exp || 'Không xác định';
+        document.getElementById('foundMonths').textContent = months ? months+' tháng' : 'Không thấy';
+        const confidence = {high:'Cao',medium:'Trung bình',low:'Thấp'}[data.confidence] || 'Chưa xác định';
+        document.getElementById('foundConfidence').textContent = confidence+' (AI tự đánh giá, không phải tỷ lệ chính xác)';
+        document.getElementById('foundNotes').textContent = note;
+        parseMs = performance.now() - parseStart;
+        const totalMs = performance.now() - t0;
+        const usage = raw.usage || {};
+        scanMetricsEl.textContent =
+            '⏱ Tổng: '+Math.round(totalMs)+' ms | API: '+Math.round(requestMs)+' ms'
+            + '\n⚡ Chuẩn bị ảnh: '+Math.round(prepareMs)+' ms | Kiểm tra: '+Math.round(parseMs)+' ms'
+            + '\n🖼 Ảnh gốc: '+processed.width+'×'+processed.height+' px (~'+processed.sizeKB+' KB)'
+            + (roiImage ? '\n🔎 Vùng chọn: '+roiImage.width+'×'+roiImage.height+' px ('+roiImage.views+' góc nhìn)' : '\n🔎 Chưa chọn vùng chữ')
+            + '\n🤖 Model: '+model
+            + (Number.isFinite(usage.input_tokens) ? '\n🔢 Token: '+usage.input_tokens+' đầu vào / '+(usage.output_tokens ?? '?')+' đầu ra' : '');
+        scanMetricsEl.style.display = 'block';
+        liveElapsedEl.textContent = Math.round(totalMs).toLocaleString('vi-VN')+' ms';
+        livePhaseEl.textContent = 'Hoàn tất';
+        scanLiveEl.classList.add('done');
+        document.getElementById('scanReview').style.display = 'block';
+        const reason=validateAutoScan(data,mfg,exp,months);
+        if (!reason) {
+            const calculated=autoFillAndCalculate(mfg,exp,months);
+            scanMessage(calculated
+              ? '✅ Đã đọc NSX/HSD, tự điền và tính xong. Hãy đối chiếu ngày với bao bì trước khi sử dụng.'
+              : 'Đã nhận diện nhưng không tính được; xem lại ngày trên nhãn.', !calculated);
+            if (calculated) {
+                document.getElementById('scanSettings').open=false;
+                requestAnimationFrame(() => document.getElementById('result').scrollIntoView({behavior:'smooth',block:'start'}));
+            }
+        } else {
+            scanMessage('⚠️ Chưa tự tính: '+reason+' Bạn có thể khoanh vùng ngày và đọc lại, hoặc nhập ngày vào biểu mẫu.',true);
+            document.getElementById('scanFocusDetails').open=true;
+        }
+    } catch (e) {
+        if (job !== scanGeneration) return;
+        const cause = e && e.message || 'Lỗi không rõ';
+        const networkError = (e instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(cause));
+        scanMessage(e.name === 'AbortError' ? 'Hết thời gian chờ 90 giây hoặc yêu cầu đã bị hủy.'
+            : networkError ? 'Không kết nối được Supabase Edge Function. Kiểm tra URL trong config.js, ALLOWED_ORIGINS và trạng thái Function.'
+            : 'Không đọc được ảnh: '+cause, true);
+        livePhaseEl.textContent = 'Chưa thành công';
+        scanMetricsEl.textContent = '⏱ Thời gian đến lỗi: '+Math.round(performance.now()-t0)+' ms';
+        scanMetricsEl.style.display = 'block';
+    } finally {
+        resetCaptcha();
+        if (timeout) clearTimeout(timeout);
+        if (job === scanGeneration) {
+            scanEndTimer();
+            activeScanController = null;
+            scanStartEl.disabled = false;
+            scanStartEl.classList.remove('busy');
+            scanStartEl.textContent = '🔄 Đọc lại ảnh & tính';
+        }
+    }
+}
+// =============================
+// 1) Phát hiện mobile / PC
+// =============================
+const isMobile =
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    window.innerWidth <= 768;
+
+// =============================
+// 2) Hàm auto-format dd/mm/yyyy
+//    dùng cho mobile
+// =============================
+function autoFormatDateInput(el) {
+    if (!el) return;
+
+    el.addEventListener("input", function () {
+        // Lấy toàn bộ số, bỏ ký tự khác
+        let v = el.value.replace(/\D/g, "");
+
+        // Giới hạn 8 số: ddmmyyyy
+        if (v.length > 8) v = v.slice(0, 8);
+
+        let out = "";
+
+        if (v.length <= 2) {
+            // đang gõ ngày
+            out = v;
+        } else if (v.length <= 4) {
+            // ngày + tháng
+            out = v.slice(0, 2) + "/" + v.slice(2);
+        } else {
+            // dd/mm/yyyy
+            out = v.slice(0, 2) + "/" + v.slice(2, 4) + "/" + v.slice(4);
+        }
+
+        el.value = out;
+    });
+}
+
+// =============================
+// 3) Khởi tạo input theo thiết bị
+// =============================
+function enforcePCDateFormat(el, fp) {
+    el.addEventListener("input", function () {
+        let v = el.value.replace(/\D/g, "");
+
+        if (v.length >= 8) {
+            let d = v.slice(0, 2);
+            let m = v.slice(2, 4);
+            let y = v.slice(4, 8);
+
+            let formatted = `${d}/${m}/${y}`;
+            el.value = formatted;
+
+            // Đồng bộ vào flatpickr
+            fp.setDate(formatted, true);
+        }
+    });
+}
+
+if (!isMobile && typeof flatpickr === "function") {
+    // PC dùng popup lịch
+    //flatpickr("#mfg", { dateFormat: "d/m/Y", allowInput: true });
+    //flatpickr("#exp", { dateFormat: "d/m/Y", allowInput: true });
+	const fp1 = flatpickr("#mfg", { dateFormat: "d/m/Y", allowInput: true });
+    const fp2 = flatpickr("#exp", { dateFormat: "d/m/Y", allowInput: true });
+
+    enforcePCDateFormat(document.getElementById("mfg"), fp1);
+    enforcePCDateFormat(document.getElementById("exp"), fp2);
+} else {
+    // Mobile hoặc khi thư viện lịch chưa tải: nhập tay, tự thêm dấu /
+    autoFormatDateInput(document.getElementById("mfg"));
+    autoFormatDateInput(document.getElementById("exp"));
+}
+
+// =============================
+// 4) Accordion
+// =============================
+function toggleAcc(id) {
+    const body = document.getElementById(id);
+    const header = body.previousElementSibling;
+
+    if (body.style.maxHeight) {
+        body.style.maxHeight = null;
+        header.classList.remove("open");
+    } else {
+        body.style.maxHeight = body.scrollHeight + "px";
+        header.classList.add("open");
+    }
+}
+
+// =============================
+// 5) Xử lý ngày
+// =============================
+function parseDMY(str) {
+    const [d, m, y] = str.split("/");
+    return new Date(y, m - 1, d);
+}
+
+function formatDate(d) {
+    return (
+        String(d.getDate()).padStart(2, "0") +
+        "/" +
+        String(d.getMonth() + 1).padStart(2, "0") +
+        "/" +
+        d.getFullYear()
+    );
+}
+
+// =============================
+// 6) Cộng / Trừ tháng
+// =============================
+function addMonths(months) {
+    let mfg = document.getElementById("mfg").value;
+    let exp = document.getElementById("exp").value;
+    if (!mfg) return alert("Vui lòng nhập ngày sản xuất trước!");
+
+    let base = exp ? parseDMY(exp) : parseDMY(mfg);
+    base.setMonth(base.getMonth() + months);
+
+    let max = parseDMY(mfg);
+    max.setFullYear(max.getFullYear() + 20);
+
+    let min = parseDMY(mfg);
+
+    if (base > max) base = max;
+    if (base < min) base = min;
+
+    document.getElementById("exp").value = formatDate(base);
+}
+
+// =============================
+// 7) Tính HSD
+// =============================
+function shiftCalendarMonths(date, months) {
+    const firstOfTarget = new Date(date.getFullYear(), date.getMonth()+months, 1);
+    const lastDay = new Date(firstOfTarget.getFullYear(),firstOfTarget.getMonth()+1,0).getDate();
+    return new Date(firstOfTarget.getFullYear(),firstOfTarget.getMonth(),Math.min(date.getDate(),lastDay));
+}
+function checkedDMY(value) {
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value || '')) return null;
+    const d=parseDMY(value);
+    return Number.isFinite(d.getTime()) && formatDate(d) === value ? d : null;
+}
+function calc({silent=false} = {}) {
+    const error = msg => {
+        if (!silent) alert(msg);
+        else document.getElementById('result').innerHTML = `<div class="result-box danger">⚠️ ${msg}</div>`;
+        return false;
+    };
+    let mfg = document.getElementById("mfg").value;
+    let mode = document.getElementById("hsdMode").value;
+
+    if (!mfg) return error("Vui lòng nhập ngày sản xuất!");
+
+    const mfgD = checkedDMY(mfg);
+    if (!mfgD) return error('Ngày sản xuất không hợp lệ (dd/mm/yyyy).');
+    let expD;
+
+    if (mode === "best") {
+        let months = parseInt(document.getElementById("bestMonth").value);
+
+        if (!months || months <= 0) {
+            return error("Vui lòng nhập hạn sử dụng tốt nhất bằng số tháng!");
+        }
+
+        expD = shiftCalendarMonths(mfgD,months);
+
+    } else {
+        let exp = document.getElementById("exp").value;
+
+        if (!exp) return error("Vui lòng nhập hạn sử dụng cụ thể!");
+        expD = checkedDMY(exp);
+        if (!expD) return error('Hạn sử dụng không hợp lệ (dd/mm/yyyy).');
+    }
+
+    const exp = formatDate(expD);
+    const current = new Date();
+    const now = new Date(current.getFullYear(),current.getMonth(),current.getDate());
+    if (expD <= mfgD) return error('HSD phải sau NSX.');
+
+    if (now < mfgD) {
+        document.getElementById("result").innerHTML =
+            `<div class='result-box warning'>❗ Chưa đến ngày sản xuất!<p>NSX: ${mfg} · HSD: ${exp}</p></div>`;
+        return true;
+    }
+    if (now > expD) {
+        document.getElementById("result").innerHTML =
+            `<div class='result-box danger'>❌ ĐÃ HẾT HẠN!<p>NSX: ${mfg} · HSD: ${exp}</p></div>`;
+        return true;
+    }
+
+    let total = expD - mfgD;
+    let used = now - mfgD;
+
+    let percentUsed = (used / total * 100).toFixed(2);
+    let percentLeft = (100 - percentUsed).toFixed(0);
+    let daysLeft = Math.ceil((expD - now) / 86400000);
+
+    // Các mốc tính theo % DATE CÒN LẠI
+    // Kho 50%  = đã dùng 50% tổng HSD
+    // QL 35%   = đã dùng 65% tổng HSD
+    // Rút 20%  = đã dùng 80% tổng HSD
+    let khoDays = Math.floor(total * 0.5);
+    let khoDate = new Date(mfgD.getTime() + khoDays);
+    let khoStr = formatDate(khoDate);
+
+    let qlDays = Math.floor(total * 0.65);
+    let qlDate = new Date(mfgD.getTime() + qlDays);
+    let qlStr = formatDate(qlDate);
+
+    let rutDays = Math.floor(total * 0.8);
+    let rutDate = new Date(mfgD.getTime() + rutDays);
+    let rutStr = formatDate(rutDate);
+
+    let cls = "good", emoji = "🟢", msg = "Còn HSD tốt";
+
+    if (percentLeft <= 20) {
+        cls = "danger";
+        emoji = "🔴";
+        msg = "Đến mốc rút date / cần xử lý ngay";
+    } else if (percentLeft <= 35) {
+        cls = "warning";
+        emoji = "🟠";
+        msg = "Đến mốc báo date QL 35%";
+    } else if (percentLeft <= 50) {
+        cls = "warning";
+        emoji = "🟡";
+        msg = "Đến mốc Date Kho 50%";
+    }
+
+    document.getElementById("result").innerHTML = `
+        <div class="result-box">
+            <p><b>1. Ngày sản xuất:</b> ${mfg}</p>
+            <p><b>2. Hạn sử dụng:</b> ${exp}</p>
+
+			<p>
+				<b>3. Kết luận:</b>
+				<span class="${cls}">
+					${emoji} ${msg}
+				</span>
+			</p>
+
+            <p><b>- Date hiện tại:</b>
+               <span style="color:#27ae60; font-weight:bold; font-size:1.25em;">${percentLeft}%</span>
+            </p>
+
+            <p><b>- Date Kho 50%:</b>
+               <span style="color:#2980b9; font-weight:bold; font-size:1.15em;">${khoStr}</span>
+            </p>
+
+            <p><b>- Date QL 35%:</b>
+               <span style="color:#ff6600; font-weight:bold; font-size:1.15em;">${qlStr}</span>
+            </p>
+
+            <p><b>- Date rút 20%:</b>
+               <span style="color:#c0392b; font-weight:bold; font-size:1.15em;">${rutStr}</span>
+            </p>
+        </div>
+    `;
+    return true;
+}
+
+// =============================
+// 8) reset
+// =============================
+function resetAll() {
+    const mfgInput = document.getElementById("mfg");
+    const expInput = document.getElementById("exp");
+	
+	document.getElementById("bestMonth").value = "";
+	document.getElementById("hsdMode").value = "best";
+	toggleHsdMode();
+
+    // Xóa nội dung ô
+    mfgInput.value = "";
+    expInput.value = "";
+
+    // Bỏ readonly để nhập lại
+    mfgInput.readOnly = false;
+
+    // Xóa kết quả
+    document.getElementById("result").innerHTML = "";
+
+    // Reset select box tính ngược
+    const hs = document.getElementById("hsdSelect");
+    if (hs) hs.value = "";
+
+    // Ẩn lại combo box
+    const box = document.getElementById("reverseBox");
+    if (box) box.style.display = "none";
+	
+}
+
+// =============================
+//  HIỆN / ẨN COMBO BOX TÍNH NGƯỢC
+// =============================
+function updateReverseBox() {
+    const mfg = document.getElementById("mfg").value.trim();
+    const exp = document.getElementById("exp").value.trim();
+    const box = document.getElementById("reverseBox");
+
+    // Điều kiện hiển thị:
+    // EXP đã nhập + MFG đang trống
+    if (exp !== "" && mfg === "") {
+        box.style.display = "block";
+    } else {
+        box.style.display = "none";
+    }
+}
+
+// Theo dõi 2 ô input
+document.getElementById("mfg").addEventListener("input", updateReverseBox);
+document.getElementById("exp").addEventListener("input", updateReverseBox);
+
+
+// =============================
+//  TÍNH NGƯỢC EXP → MFG
+// =============================
+function reverseCalcMFG() {
+    let exp = document.getElementById("exp").value;
+    let hsd = document.getElementById("hsdSelect").value;
+
+    if (!exp) {
+        alert("Vui lòng nhập hạn sử dụng trước!");
+        document.getElementById("hsdSelect").value = "";
+        return;
+    }
+
+    if (!hsd) return;
+
+    let expDate = parseDMY(exp);
+    let newMFG = new Date(expDate);
+
+    newMFG.setMonth(newMFG.getMonth() - parseInt(hsd));
+
+    // Cập nhật MFG
+    const mfgInput = document.getElementById("mfg");
+    mfgInput.value = formatDate(newMFG);
+
+    // KHÓA ô MFG theo yêu cầu
+    mfgInput.readOnly = true;
+
+    // Ẩn lại combo box
+    document.getElementById("reverseBox").style.display = "none";
+}
+
+function applyBestMonth() {
+    let mfg = document.getElementById("mfg").value;
+    let months = parseInt(document.getElementById("bestMonth").value);
+
+    if (!mfg) {
+        alert("Vui lòng nhập ngày sản xuất trước!");
+        return;
+    }
+
+    if (!months || months <= 0) {
+        alert("Vui lòng nhập số tháng hợp lệ!");
+        return;
+    }
+
+    let base = parseDMY(mfg);
+    base.setMonth(base.getMonth() + months);
+
+    document.getElementById("exp").value = formatDate(base);
+}
+
+function toggleHsdMode() {
+    const mode = document.getElementById("hsdMode").value;
+    const bestBox = document.getElementById("bestHsdBox");
+    const dateBox = document.getElementById("dateHsdBox");
+
+    if (mode === "best") {
+        bestBox.style.display = "block";
+        dateBox.style.display = "none";
+        document.getElementById("exp").value = "";
+    } else {
+        bestBox.style.display = "none";
+        dateBox.style.display = "block";
+        document.getElementById("bestMonth").value = "";
+    }
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+
+<script src="https://js.hcaptcha.com/1/api.js?onload=onHsdCaptchaReady&amp;render=explicit" async defer></script>
+</body>
+</html>

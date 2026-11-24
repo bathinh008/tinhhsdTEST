@@ -1,0 +1,4 @@
+# Public function: JWT is intentionally disabled because visitors do not sign in.
+# Access is gated INSIDE the function using hCaptcha, origin check and atomic DB quotas.
+[functions.read-expiry-date]
+verify_jwt = false
