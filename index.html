@@ -445,6 +445,8 @@
         <button type="button" id="toggleApiKey" onclick="toggleApiKeyVisibility()" aria-label="Hiện hoặc ẩn mã truy cập">Hiện</button>
       </div>
       <p class="scan-subtle" id="keySafety">Mã truy cập chỉ giữ khi trang đang mở. Không nhập OpenAI API key tại đây. Key OpenAI được giữ trong Supabase Secrets.</p>
+      <button type="button" id="checkScanConnection" onclick="checkScanConnection()">Kiểm tra kết nối</button>
+      <p id="connectionCheckResult" class="scan-subtle" role="status" aria-live="polite"></p>
       <p class="scan-subtle">Model được cấu hình trên Supabase.</p>
       <details class="scan-more">
         <summary>Tùy chỉnh ảnh và kết nối (nâng cao)</summary>
@@ -853,17 +855,57 @@ function readOpenAIResult(raw) {
     return data;
 }
 function scanErrorFromStatus(status, errObj) {
+    const platformMessage = errObj && typeof errObj.message === 'string' ? errObj.message : '';
+    if (status === 401 && /JWT|authorization header/i.test(platformMessage)) {
+        return 'Supabase đang chặn ở bước JWT. Tắt Verify JWT riêng cho scan-date; bản này xác thực bằng mã truy cập.';
+    }
+    const detail = errObj && errObj.error && typeof errObj.error.message === 'string'
+        ? errObj.error.message.slice(0,500) : '';
+    if (detail) return detail;
     const messages = {
         400:'Yêu cầu không hợp lệ; hãy thử ảnh nhỏ hơn.',
         401:'Mã truy cập không đúng.',403:'Tên miền website chưa được cho phép trên Supabase.',
         404:'Không tìm thấy hàm scan-date; kiểm tra URL và triển khai Supabase.',
         413:'Ảnh quá lớn; chọn xử lý “Ảnh gọn” hoặc chọn vùng nhỏ hơn.',
         429:'Hết hạn mức API hoặc bị giới hạn tốc độ.',
-        500:'Dịch vụ OpenAI gặp lỗi.',502:'Không thể kết nối OpenAI.',503:'OpenAI tạm thời không khả dụng.'
+        500:'Máy chủ gặp lỗi.',502:'Không thể hoàn tất yêu cầu OpenAI.',503:'Hàm Supabase chưa sẵn sàng; kiểm tra Secrets và phiên bản triển khai.'
     };
-    const detail = errObj && errObj.error && typeof errObj.error.message === 'string'
-        ? errObj.error.message.slice(0,180) : '';
-    return (messages[status] || 'Lỗi API HTTP '+status) + (detail ? ' '+detail : '');
+    return messages[status] || 'Lỗi API HTTP '+status;
+}
+async function checkScanConnection() {
+    const result = document.getElementById('connectionCheckResult');
+    const button = document.getElementById('checkScanConnection');
+    const token = apiKeyEl.value.trim();
+    if (!token) { result.textContent = 'Nhập mã truy cập trước khi kiểm tra.'; return; }
+    let endpoint;
+    try {
+        endpoint = new URL(fileApiConfig.scanUrl);
+        if (endpoint.protocol !== 'https:' || !endpoint.pathname.endsWith('/functions/v1/scan-date')) throw new Error();
+    } catch { result.textContent = 'URL scan-date trong config.js chưa hợp lệ.'; return; }
+    button.disabled = true;
+    result.textContent = 'Đang kiểm tra Supabase…';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+        const response = await fetch(endpoint.href, {
+            method:'POST', headers:{'Content-Type':'application/json','X-Scan-Token':token},
+            body:JSON.stringify({action:'check'}), signal:controller.signal, cache:'no-store'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            if (data.error && data.error.message === 'Chưa cấu hình Secrets hợp lệ trên Supabase.')
+                throw new Error('Supabase vẫn đang chạy code cũ. Thay toàn bộ index.ts của scan-date bằng bản fix-v2 rồi Deploy lại.');
+            if (response.status === 400 && !data.version)
+                throw new Error('Hàm chưa hỗ trợ kiểm tra kết nối. Deploy bản index.ts fix-v2 trước.');
+            throw new Error(scanErrorFromStatus(response.status,data));
+        }
+        if (data.ok !== true || data.version !== 'scan-date-secrets-fix-v2')
+            throw new Error('Phản hồi không đúng phiên bản. Kiểm tra scanUrl và Deploy lại bản fix-v2.');
+        result.textContent = data.message + ' (fix-v2)';
+    } catch (e) {
+        result.textContent = e.name === 'AbortError' ? 'Hết thời gian chờ. Thử kiểm tra lại.'
+            : e instanceof TypeError ? 'Không kết nối được Supabase. Kiểm tra mạng, scanUrl và ALLOWED_ORIGINS.' : e.message;
+    } finally { clearTimeout(timeout); button.disabled = false; }
 }
 // Lấy đúng ngày in trên nhãn, giúp tránh tự tính nếu ngày chuẩn hóa lệch chuỗi AI đọc.
 function dateFromRawPrint(raw) {
