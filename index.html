@@ -9,6 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="./config.js"></script>
 
 <style>
     body {
@@ -342,9 +343,10 @@
     .scan-config input {width:100%;box-sizing:border-box}
     .scan-metrics {font-size:13px;color:#34516e;background:#f1f6fc;padding:10px 12px;border-radius:9px;margin-top:10px;display:none;white-space:pre-wrap;line-height:1.55}
     .scan-warning {font-size:13px;color:#8a470b;background:#fff2da;border:1px solid #f8d49c;padding:10px;border-radius:9px;margin-top:10px;line-height:1.55}
+    .scan-password-row {display:flex;gap:7px;align-items:center}
+    .scan-password-row input {flex:1;min-width:0}
+    .scan-password-row button {flex:none;border:1px solid #bdd1e7;border-radius:8px;padding:10px;background:#f5f9ff;cursor:pointer}
     .scan-config .scan-quick input {width:18px;height:18px;min-width:18px;flex:0 0 18px;padding:0;margin:2px 0 0}
-    .scan-human-check {margin:5px 0;min-height:1px}
-    .scan-safe-notice {background:#eef8f4;border:1px solid #cee7dc;color:#20684e;border-radius:10px;padding:11px;font-size:13px;line-height:1.5}
     .scan-live.done .scan-live-track i {animation:none;transform:none;width:100%;background:#15816f}
     .scan-config .scan-help {margin:8px 0 0}
     @media(max-width:480px) {.scan-card {padding:14px}.scan-actions label {font-size:14px}.scan-heading {font-size:19px}}
@@ -405,14 +407,13 @@
     <label class="scan-oneclick" for="photoGallery">📸 Chụp / Chọn ảnh để tính
       <input id="photoGallery" type="file" accept="image/*">
     </label>
-    <div id="scanHumanCheck" class="scan-human-check" aria-label="Xác thực bảo vệ dịch vụ AI"></div>
     <div id="scanCompactStatus" class="scan-compact-status" role="status" aria-live="polite" hidden></div>
     <div id="scanAdvancedPanel" class="scan-advanced" hidden>
     <div id="scanLive" class="scan-live" aria-live="off">
       <div class="scan-live-top"><strong id="liveElapsed">0 ms</strong><span id="livePhase">Sẵn sàng</span></div>
       <div class="scan-live-track"><i></i></div>
     </div>
-    <div id="scanStatus" role="status" aria-live="polite" class="scan-status">Sẵn sàng đọc ảnh qua Supabase Edge Function.</div>
+    <div id="scanStatus" role="status" aria-live="polite" class="scan-status">Nhập mã truy cập trong Cài đặt, sau đó chọn ảnh.</div>
     <div id="scanReview" class="scan-review">
       <div class="scan-dates"><span>NSX: <b id="foundMfg">—</b></span><span>HSD: <b id="foundExp">—</b></span></div>
       <details class="scan-more">
@@ -437,16 +438,28 @@
     </details>
     <button type="button" id="scanStart" class="scan-action scan-retry" onclick="scanDateImage()" disabled style="display:none">🔄 Đọc lại ảnh &amp; tính</button>
     <details id="scanSettings" class="scan-config scan-more">
-      <summary>⚙️ Tùy chỉnh đọc ảnh</summary>
-      <p class="scan-safe-notice">🔒 OpenAI API key được lưu an toàn trong Supabase Secrets, không có trong website và không cần người dùng nhập khóa.</p>
-      <label class="scan-quick" for="scanEnhanceDots"><input id="scanEnhanceDots" type="checkbox" checked> Tăng tương phản vùng khoanh</label>
-      <label for="imageMode">Chất lượng xử lý ảnh</label>
-      <select id="imageMode">
-        <option value="balanced" selected>Rõ chữ (khuyên dùng)</option>
-        <option value="fast">Ảnh gọn (nhanh hơn)</option>
-        <option value="max">Giữ chi tiết tối đa</option>
-      </select>
-      <p class="scan-subtle">Mô hình AI và hạn mức sử dụng do quản trị viên cấu hình trên Supabase. Ảnh chỉ được gửi khi bạn chọn hoặc chụp ảnh.</p>
+      <summary>⚙️ Cấu hình AI (thiết lập một lần)</summary>
+      <label for="apiKey">Mã truy cập đọc ảnh</label>
+      <div class="scan-password-row">
+        <input id="apiKey" type="password" placeholder="Nhập mã SCAN_ACCESS_TOKEN bạn đã đặt" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="keySafety">
+        <button type="button" id="toggleApiKey" onclick="toggleApiKeyVisibility()" aria-label="Hiện hoặc ẩn mã truy cập">Hiện</button>
+      </div>
+      <p class="scan-subtle" id="keySafety">Mã truy cập chỉ giữ khi trang đang mở. Không nhập OpenAI API key tại đây. Key OpenAI được giữ trong Supabase Secrets.</p>
+      <p class="scan-subtle">Model được cấu hình trên Supabase.</p>
+      <details class="scan-more">
+        <summary>Tùy chỉnh ảnh và kết nối (nâng cao)</summary>
+        <label class="scan-quick" for="scanEnhanceDots"><input id="scanEnhanceDots" type="checkbox" checked> Tăng tương phản vùng khoanh</label>
+        <label for="imageMode">Chất lượng xử lý ảnh</label>
+        <select id="imageMode">
+          <option value="balanced" selected>Rõ chữ (khuyên dùng)</option>
+          <option value="fast">Ảnh gọn (nhanh hơn)</option>
+          <option value="max">Giữ chi tiết tối đa</option>
+        </select>
+        <select id="scanConnection" hidden><option value="supabase">Supabase</option></select>
+        <p id="connectionHelp" class="scan-help"></p>
+        <button type="button" id="loadPepsiSample" class="scan-example" onclick="loadPepsiSample()">🧪 Thử lại ảnh Pepsi mẫu</button>
+      </details>
+      <p class="scan-warning">Không chia sẻ mã truy cập. Người có mã có thể dùng chức năng đọc ảnh và phát sinh phí API.</p>
     </details>
     <details class="scan-more scan-metrics-details" id="metricsDetails"><summary>⏱ Chi tiết tốc độ xử lý (ms)</summary>
       <div id="scanMetrics" class="scan-metrics" role="status" aria-live="polite"></div>
@@ -500,7 +513,6 @@
 
 <div id="result"></div>
 
-<script src="./config.js"></script>
 <script>
 
 // ========== AI Vision: đọc ngay + đo độ trễ ở mức mili giây ===========
@@ -516,7 +528,10 @@ let scanTimer = null;
 const scanStatusEl = document.getElementById('scanStatus');
 const scanMetricsEl = document.getElementById('scanMetrics');
 const scanStartEl = document.getElementById('scanStart');
-const PUBLIC_CONFIG = window.HSD_CONFIG || {};
+const apiKeyEl = document.getElementById('apiKey');
+// Nạp key từ file riêng; vẫn cho phép thay tạm trong Cài đặt.
+const fileApiConfig = window.HSD_API_CONFIG || {};
+const scanConnectionEl = document.getElementById('scanConnection');
 const scanLiveEl = document.getElementById('scanLive');
 const liveElapsedEl = document.getElementById('liveElapsed');
 const livePhaseEl = document.getElementById('livePhase');
@@ -534,66 +549,25 @@ function toggleScanSettings() {
     scanAdvancedPanel.hidden = !opening;
     scanSettingsToggle.setAttribute('aria-expanded', String(opening));
     scanSettingsToggle.textContent = opening ? '✕ Đóng' : '⚙️ Cài đặt';
-    if (opening) requestAnimationFrame(syncScanSelectionCanvas);
-}
-// Endpoint và site key công khai; tuyệt đối KHÔNG để OpenAI key trong website.
-function configuredBackend() {
-    try {
-        const endpoint = new URL(String(PUBLIC_CONFIG.functionUrl || ''));
-        return endpoint.protocol === 'https:' && /\/functions\/v1\/read-expiry-date\/?$/.test(endpoint.pathname) &&
-            /^[a-zA-Z0-9_-]{10,200}$/.test(String(PUBLIC_CONFIG.captchaSiteKey || '')) &&
-            !/THAY_|EXAMPLE|your-project/i.test(endpoint.host);
-    } catch { return false; }
-}
-let captchaWidgetId = null;
-let captchaWaiter = null;
-function onHsdCaptchaReady() {
-    if (!configuredBackend() || !window.hcaptcha) return;
-    try {
-        captchaWidgetId = window.hcaptcha.render('scanHumanCheck', {
-            sitekey: PUBLIC_CONFIG.captchaSiteKey,
-            size: 'invisible',
-            callback: token => { if (captchaWaiter) captchaWaiter.resolve(token); },
-            'expired-callback': () => { if (captchaWaiter) captchaWaiter.reject(new Error('Xác minh đã hết hạn.')); },
-            'error-callback': () => { if (captchaWaiter) captchaWaiter.reject(new Error('Không xác minh được hCaptcha.')); }
-        });
-    } catch (e) {
-        scanMessage('Không khởi tạo được hCaptcha: '+e.message, true);
-    }
-}
-function waitCaptchaToken(signal) {
-    return new Promise((resolve,reject) => {
-        if (captchaWidgetId === null || !window.hcaptcha) {
-            reject(new Error('hCaptcha chưa sẵn sàng. Hãy thử tải lại trang hoặc tắt tiện ích chặn CAPTCHA.'));
-            return;
+    if (opening) {
+        // Lần đầu cần thiết lập key: mở sẵn biểu mẫu cấu hình bên trong.
+        if (!apiKeyEl.value.trim().length) {
+            document.getElementById('scanSettings').open = true;
         }
-        let settled = false;
-        let timer = null;
-        const finish = (error, token) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            signal.removeEventListener('abort', onAbort);
-            if (captchaWaiter === waiter) captchaWaiter = null;
-            error ? reject(error) : resolve(token);
-        };
-        const onAbort = () => finish(new DOMException('Yêu cầu đã hủy', 'AbortError'));
-        const waiter = {
-            resolve: token => finish(null, token),
-            reject: err => finish(err instanceof Error ? err : new Error(String(err)))
-        };
-        captchaWaiter = waiter;
-        timer = setTimeout(() => finish(new Error('Xác minh hCaptcha quá thời gian 45 giây.')),45000);
-        signal.addEventListener('abort',onAbort,{once:true});
-        if (signal.aborted) return onAbort();
-        try { window.hcaptcha.execute(captchaWidgetId); }
-        catch(e) { finish(new Error('Không thể bắt đầu xác minh: '+e.message)); }
-    });
-}
-function resetCaptcha() {
-    if (captchaWidgetId !== null && window.hcaptcha) {
-        try { window.hcaptcha.reset(captchaWidgetId); } catch(e) { /* Có thể widget đã được reset */ }
+        // Khi ảnh đã được chọn và người dùng mở phần chi tiết thì vẽ lại khung cắt.
+        requestAnimationFrame(syncScanSelectionCanvas);
     }
+}
+
+function updateConnectionHelp() {
+    document.getElementById('connectionHelp').textContent = 'Ảnh được gửi đến Supabase để đọc ngày. OpenAI API key không nằm trong website.';
+}
+scanConnectionEl.addEventListener('change', updateConnectionHelp);
+updateConnectionHelp();
+function toggleApiKeyVisibility() {
+    const wasVisible = apiKeyEl.type === 'text';
+    apiKeyEl.type = wasVisible ? 'password' : 'text';
+    document.getElementById('toggleApiKey').textContent = wasVisible ? 'Hiện' : 'Ẩn';
 }
 function scanMessage(message, isError = false) {
     scanStatusEl.textContent = message;
@@ -604,6 +578,8 @@ function scanMessage(message, isError = false) {
         shortText = '✅ Đã đọc ảnh và tính xong. Kiểm tra ngày và kết quả bên dưới.';
     } else if (/Đang đọc ảnh/.test(message)) {
         shortText = '⏳ AI đang đọc ảnh và tự tính...';
+    } else if (/mã truy cập/.test(message) && !apiKeyEl.value.trim().length) {
+        shortText = '🔑 Bấm Cài đặt để nhập mã truy cập và bắt đầu đọc ảnh.';
     } else if (isError) {
         shortText = '⚠️ ' + message.replace(/^⚠️?\s*/, '');
     } else if (/Đã chọn ảnh|Ảnh đã sẵn sàng/.test(message)) {
@@ -709,6 +685,15 @@ function clearScanSelection() {
     document.getElementById('scanFocusLabel').textContent='Kéo khoanh vùng chữ NSX/HSD (không bắt buộc)';
     syncScanSelectionCanvas();
 }
+async function loadPepsiSample() {
+    try {
+        const res=await fetch('./samples/pepsi-chu-in-cham.jpg',{cache:'no-store'});
+        if (!res.ok) throw new Error('Không mở được ảnh mẫu. Hãy chạy start-test.bat.');
+        const blob=await res.blob();
+        onScanFile(new File([blob],'pepsi-chu-in-cham.jpg',{type:'image/jpeg'}),
+          {x:285/960,y:640/1280,w:250/960,h:180/1280});
+    } catch(e) {scanMessage('Không mở được ảnh mẫu: '+e.message,true);}
+}
 // Generate a high-resolution ROI; the second view enhances ink dots while retaining a color view.
 function canvasDataURL(canvas,quality=.91) {return canvas.toDataURL('image/jpeg',quality);}
 function createInkEnhancedCanvas(base) {
@@ -795,7 +780,7 @@ function onScanFile(file, initialRoi=null) {
     const options = document.getElementById('imageMode').value;
     const prepareStarted = performance.now();
     const task = prepareScanImage(file, options).then(processed => {
-        if (configuredBackend() && generation === scanGeneration && chosenScanFile === file && !activeScanController) {
+        if (generation === scanGeneration && chosenScanFile === file && !activeScanController) {
             scanMessage('Ảnh đã sẵn sàng. Chọn Đọc lại ảnh & tính để nhận diện.');
         }
         return {...processed, prepareMs: performance.now() - prepareStarted};
@@ -803,7 +788,11 @@ function onScanFile(file, initialRoi=null) {
     // Bắt đầu chuẩn bị ngay từ khi chọn ảnh; các lỗi chỉ báo khi đọc.
     preparedScanImage = {file, options, promise:task};
     task.catch(() => {}); // Preload chạy trước khi người dùng nhấn đọc; lỗi vẫn được báo khi await.
-    scanDateImage();
+    if (apiKeyEl.value.trim().length) {
+        scanDateImage();
+    } else {
+        scanMessage('Đã chọn ảnh. Nhập mã truy cập trong Cấu hình AI, sau đó ứng dụng tự đọc và tính.');
+    }
 }
 document.getElementById('photoGallery').addEventListener('change', e => {
     onScanFile(e.target.files[0]);
@@ -811,6 +800,10 @@ document.getElementById('photoGallery').addEventListener('change', e => {
 });
 document.getElementById('imageMode').addEventListener('change', () => { preparedScanImage = null; });
 document.getElementById('scanEnhanceDots').addEventListener('change', () => { preparedScanImage = null; });
+// Khi đã chọn ảnh trước rồi mới nhập key, tự chạy đúng một lượt sau khi hoàn tất nhập.
+apiKeyEl.addEventListener('change', () => {
+    if (chosenScanFile && apiKeyEl.value.trim().length && !activeScanController && !recognizedDates) scanDateImage();
+});
 // Browser native canvas (không cài OCR hay thư viện phụ).
 function prepareScanImage(file, mode) {
     const maxDimension = mode === 'fast' ? 1536 : mode === 'max' ? 3200 : 2400;
@@ -849,12 +842,7 @@ function normalizedDate(value) {
     if (y < 1900 || y > 2200 || date.getFullYear() !== y || date.getMonth() !== m-1 || date.getDate() !== d) return '';
     return String(d).padStart(2,'0') + '/' + String(m).padStart(2,'0') + '/' + y;
 }
-function createScanPayload(imageDataUrl, roiDataUrl, captchaToken) {
-    return {image:imageDataUrl, roi:roiDataUrl || null, captchaToken};
-}
 function readOpenAIResult(raw) {
-    if (raw && raw.result && typeof raw.result === 'object' && !Array.isArray(raw.result)) return raw.result;
-
     const content = (raw.output || []).flatMap(item => item.content || []);
     const outputText = content.filter(part => part.type === 'output_text').map(part => part.text).join('');
     if (content.find(part => part.type === 'refusal')) throw new Error('AI từ chối phân tích ảnh.');
@@ -866,17 +854,16 @@ function readOpenAIResult(raw) {
 }
 function scanErrorFromStatus(status, errObj) {
     const messages = {
-        400:'Yêu cầu ảnh không hợp lệ; hãy thử ảnh khác hoặc nhỏ hơn.',
-        401:'Phiên làm việc không hợp lệ.',403:'Yêu cầu không được phép. Kiểm tra tên miền hoặc hCaptcha.',
-        404:'Không tìm thấy Supabase Edge Function.',
+        400:'Yêu cầu không hợp lệ; hãy thử ảnh nhỏ hơn.',
+        401:'Mã truy cập không đúng.',403:'Tên miền website chưa được cho phép trên Supabase.',
+        404:'Không tìm thấy hàm scan-date; kiểm tra URL và triển khai Supabase.',
         413:'Ảnh quá lớn; chọn xử lý “Ảnh gọn” hoặc chọn vùng nhỏ hơn.',
-        422:'AI chưa thể nhận diện ảnh này.',
-        429:'Đã vượt giới hạn lượt đọc. Hãy thử lại sau.',
-        500:'Máy chủ chưa được cấu hình.',502:'Không nhận được kết quả từ dịch vụ AI.',503:'Dịch vụ nhận diện đang bận.'
+        429:'Hết hạn mức API hoặc bị giới hạn tốc độ.',
+        500:'Dịch vụ OpenAI gặp lỗi.',502:'Không thể kết nối OpenAI.',503:'OpenAI tạm thời không khả dụng.'
     };
     const detail = errObj && errObj.error && typeof errObj.error.message === 'string'
         ? errObj.error.message.slice(0,180) : '';
-    return (messages[status] || 'Lỗi API HTTP '+status) + ([400,403,422,429,502,503].includes(status) && detail ? ' '+detail : '');
+    return (messages[status] || 'Lỗi API HTTP '+status) + (detail ? ' '+detail : '');
 }
 // Lấy đúng ngày in trên nhãn, giúp tránh tự tính nếu ngày chuẩn hóa lệch chuỗi AI đọc.
 function dateFromRawPrint(raw) {
@@ -920,7 +907,21 @@ function autoFillAndCalculate(mfg, exp, months) {
 }
 async function scanDateImage() {
     if (!chosenScanFile) return scanMessage('Vui lòng chọn ảnh trước.', true);
-    if (!configuredBackend()) return scanMessage('Chưa cấu hình Supabase Edge Function và hCaptcha Site Key. Kiểm tra file config.js.', true);
+    const apiKey = apiKeyEl.value.trim();
+    if (!apiKey.length) {
+        // Input nằm trong bảng cài đặt thu gọn: không đưa focus tới input vô hình.
+        if (!scanAdvancedPanel.hidden) {
+            document.getElementById('scanSettings').open = true;
+            apiKeyEl.focus();
+        }
+        return scanMessage('Vui lòng nhập mã truy cập trước khi đọc ảnh.', true);
+    }
+    const mode = 'supabase';
+    const endpoint = fileApiConfig.scanUrl;
+    try {
+        const url = new URL(endpoint);
+        if (url.protocol !== 'https:' || !url.pathname.endsWith('/functions/v1/scan-date')) throw new Error();
+    } catch { return scanMessage('Kiểm tra scanUrl trong config.js: cần URL HTTPS của hàm scan-date.', true); }
     // Hủy bản đọc cũ (nếu có) và bỏ qua mọi phản hồi cũ.
     if (activeScanController) activeScanController.abort();
     scanGeneration++;
@@ -938,7 +939,7 @@ async function scanDateImage() {
     let timeout = null;
     try {
         livePhaseEl.textContent = 'Chuẩn bị ảnh';
-        let model = 'Máy chủ quản lý';
+        const model = 'Cấu hình trên Supabase';
         const imageMode = document.getElementById('imageMode').value;
         let task = preparedScanImage;
         if (!task || task.file !== chosenScanFile || task.options !== imageMode) {
@@ -958,18 +959,13 @@ async function scanDateImage() {
             if (controller.signal.aborted || job !== scanGeneration) return;
             prepareMs += performance.now()-roiStart;
         }
-        livePhaseEl.textContent = 'Xác minh hCaptcha';
-        const token = await waitCaptchaToken(controller.signal);
-        if (controller.signal.aborted || job !== scanGeneration) return;
-        livePhaseEl.textContent = 'Đang nhận diện qua Supabase';
+        livePhaseEl.textContent = 'Đang nhận diện qua API';
         timeout = setTimeout(() => controller.abort(), 90000);
         const apiStart = performance.now();
-        // Token được sử dụng một lần; reset để lần đọc sau có token mới.
-        const payload = createScanPayload(processed.dataUrl,roiImage && roiImage.dataUrl,token);
-        const response = await fetch(PUBLIC_CONFIG.functionUrl, {
+        const response = await fetch(endpoint, {
             method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify(payload),
+            headers:{'Content-Type':'application/json','X-Scan-Token':apiKey},
+            body:JSON.stringify({image:processed.dataUrl, roi:roiImage ? roiImage.dataUrl : undefined}),
             cache:'no-store', signal:controller.signal
         });
         const raw = await response.json().catch(() => ({}));
@@ -979,7 +975,6 @@ async function scanDateImage() {
         const parseStart = performance.now();
         livePhaseEl.textContent = 'Kiểm tra kết quả';
         const data = readOpenAIResult(raw);
-        model = String(raw.model || model);
         const mfg = normalizedDate(data.mfg), exp = normalizedDate(data.exp);
         const mt = typeof data.months === 'string' ? data.months.trim() : '';
         const mn = /^\d{1,3}$/.test(mt) ? +mt : 0;
@@ -1029,15 +1024,14 @@ async function scanDateImage() {
     } catch (e) {
         if (job !== scanGeneration) return;
         const cause = e && e.message || 'Lỗi không rõ';
-        const networkError = (e instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(cause));
+        const cors = mode === 'supabase' && (e instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(cause));
         scanMessage(e.name === 'AbortError' ? 'Hết thời gian chờ 90 giây hoặc yêu cầu đã bị hủy.'
-            : networkError ? 'Không kết nối được Supabase Edge Function. Kiểm tra URL trong config.js, ALLOWED_ORIGINS và trạng thái Function.'
+            : cors ? 'Không kết nối được Supabase. Kiểm tra URL, ALLOWED_ORIGINS và trạng thái triển khai scan-date.'
             : 'Không đọc được ảnh: '+cause, true);
         livePhaseEl.textContent = 'Chưa thành công';
         scanMetricsEl.textContent = '⏱ Thời gian đến lỗi: '+Math.round(performance.now()-t0)+' ms';
         scanMetricsEl.style.display = 'block';
     } finally {
-        resetCaptcha();
         if (timeout) clearTimeout(timeout);
         if (job === scanGeneration) {
             scanEndTimer();
@@ -1314,6 +1308,7 @@ function calc({silent=false} = {}) {
 // 8) reset
 // =============================
 function resetAll() {
+    cancelRunningScan();
     const mfgInput = document.getElementById("mfg");
     const expInput = document.getElementById("exp");
 	
@@ -1435,6 +1430,5 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
-<script src="https://js.hcaptcha.com/1/api.js?onload=onHsdCaptchaReady&amp;render=explicit" async defer></script>
 </body>
 </html>

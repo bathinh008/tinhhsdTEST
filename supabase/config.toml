@@ -1,0 +1,2 @@
+[functions.scan-date]
+verify_jwt = false
